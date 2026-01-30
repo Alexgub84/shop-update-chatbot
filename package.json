@@ -11,6 +11,7 @@
     "test": "npm run lint && vitest run",
     "test:watch": "vitest",
     "test:prod": "vitest run --config vitest.config.prod.ts",
+    "test:docker": "vitest run tests/docker/docker.test.ts",
     "lint": "tsc --noEmit"
   },
   "engines": {

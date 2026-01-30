@@ -36,6 +36,8 @@ A working production-ready app that:
 ### Deployment
 - [x] GitHub Actions workflow for Railway deployment
 - [x] Railway configuration (railway.json)
+- [x] Dockerfile for production builds
+- [x] Docker integration tests (tests/docker/docker.test.ts)
 
 ---
 
@@ -45,7 +47,7 @@ All tasks for Step 1 are done:
 - Server with health check and webhook endpoint
 - Trigger detection ("test-shop" → welcome message)
 - Mock mode for local testing
-- Full test coverage (34 tests)
+- Full test coverage (34 unit/e2e tests + 4 Docker tests)
 
 ---
 
@@ -69,11 +71,17 @@ src/
 messages/
 └── en.json           # Bot messages (editable)
 
+tests/docker/
+└── docker.test.ts    # Docker build & health integration test
+
 tests/
 ├── sender.test.ts    # Green API sender tests
 ├── webhook.test.ts   # Webhook handler tests
 └── mocks/
     └── greenapi.ts   # Mock factories for testing
+
+Dockerfile            # Production multi-stage build
+.dockerignore         # Files excluded from Docker context
 ```
 
 ---
