@@ -6,7 +6,7 @@ import type { GreenApiSender } from '../greenapi/sender.js'
 import { incomingMessageSchema, type IncomingMessage } from './types.js'
 
 export interface WebhookHandlerDeps {
-  triggerCode: string
+  triggerCode?: string
   messages: Messages
   sender: GreenApiSender
   logger: Logger
@@ -31,17 +31,23 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
   }
 
   function isTriggerMatch(text: string): boolean {
+    if (!triggerCode) {
+      return true
+    }
     return text.trim().toLowerCase() === triggerCode.toLowerCase()
   }
 
   async function handle(body: unknown): Promise<WebhookHandlerResult> {
     const payload = parsePayload(body)
 
+    const messageContent = payload.messageData.textMessageData?.textMessage ?? null
+
     logger.info({
       event: 'webhook_received',
       chatId: payload.senderData.chatId,
       messageId: payload.idMessage,
-      typeWebhook: payload.typeWebhook
+      typeWebhook: payload.typeWebhook,
+      messageContent
     })
 
     if (payload.typeWebhook !== 'incomingMessageReceived') {
@@ -58,9 +64,7 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
       return { handled: false, action: 'ignored_non_text' }
     }
 
-    const text = payload.messageData.textMessageData?.textMessage ?? ''
-
-    if (!isTriggerMatch(text)) {
+    if (!isTriggerMatch(messageContent ?? '')) {
       logger.info({
         event: 'ignored_non_trigger',
         chatId: payload.senderData.chatId

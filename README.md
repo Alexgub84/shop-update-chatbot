@@ -19,7 +19,7 @@ cp .env.example .env
 PORT=3000
 LOG_LEVEL=info
 MOCK_MODE=true          # Set to false for production
-TRIGGER_CODE=test-shop
+TRIGGER_CODE=test-shop  # Optional - if not set, responds to any message
 GREEN_API_INSTANCE_ID=your_instance_id
 GREEN_API_TOKEN=your_api_token
 ```
@@ -48,8 +48,9 @@ When `MOCK_MODE=true`, the bot logs messages instead of sending them to Green AP
 ## How It Works
 
 1. Green API sends incoming WhatsApp messages to `/webhook`
-2. If message equals the trigger code (default: "test-shop"), bot responds with welcome message
-3. Other messages are ignored (returns 200 OK but no response sent)
+2. If `TRIGGER_CODE` is set and message equals it, bot responds with welcome message
+3. If `TRIGGER_CODE` is not set, bot responds to any text message
+4. Non-matching messages are ignored (returns 200 OK but no response sent)
 
 ## Testing the Webhook
 
@@ -106,7 +107,7 @@ Configure these in Railway Dashboard → Service → Variables:
 PORT=3000
 LOG_LEVEL=info
 MOCK_MODE=false
-TRIGGER_CODE=test-shop
+TRIGGER_CODE=test-shop  # Optional
 GREEN_API_INSTANCE_ID=your_instance_id
 GREEN_API_TOKEN=your_api_token
 ```

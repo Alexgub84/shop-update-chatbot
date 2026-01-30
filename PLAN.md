@@ -90,7 +90,13 @@ Dockerfile            # Production multi-stage build
 
 All modules use dependency injection for testability:
 - `sender.ts` - accepts `fetchFn` parameter (mock fetch in tests)
-- `webhook/handler.ts` - accepts `{ sender, logger, messages, triggerCode }` (all mockable)
+- `webhook/handler.ts` - accepts `{ sender, logger, messages, triggerCode? }` (all mockable)
+
+## Trigger Code
+
+The trigger code is configured via `TRIGGER_CODE` environment variable (optional).
+- If `TRIGGER_CODE` is set, only messages matching it (case-insensitive, trimmed) start the flow
+- If `TRIGGER_CODE` is not set, any text message starts the flow
 
 Run tests: `npm test`
 

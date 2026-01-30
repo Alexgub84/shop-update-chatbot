@@ -6,7 +6,7 @@ const configSchema = z.object({
   port: z.coerce.number().int().min(1).max(65535).default(3000),
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   mockMode: z.coerce.boolean().default(false),
-  triggerCode: z.string({ required_error: 'TRIGGER_CODE is required' }).min(1, 'TRIGGER_CODE cannot be empty'),
+  triggerCode: z.string().min(1).optional(),
   greenApi: z.object({
     instanceId: z.string({ required_error: 'GREEN_API_INSTANCE_ID is required' }).min(1, 'GREEN_API_INSTANCE_ID cannot be empty'),
     token: z.string({ required_error: 'GREEN_API_TOKEN is required' }).min(1, 'GREEN_API_TOKEN cannot be empty')
@@ -20,7 +20,6 @@ function fieldToEnvVar(field: string): string {
     'port': 'PORT',
     'logLevel': 'LOG_LEVEL',
     'mockMode': 'MOCK_MODE',
-    'triggerCode': 'TRIGGER_CODE',
     'greenApi.instanceId': 'GREEN_API_INSTANCE_ID',
     'greenApi.token': 'GREEN_API_TOKEN'
   }

@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "test:prod": "vitest run --config vitest.config.prod.ts",
     "test:docker": "vitest run tests/docker/docker.test.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "docker:build": "docker build -t shop-update-chatbot .",
+    "docker:run": "docker run --rm --env-file .env -p 3000:3000 shop-update-chatbot"
   },
   "engines": {
     "node": ">=18.0.0"

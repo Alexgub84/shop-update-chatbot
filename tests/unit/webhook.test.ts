@@ -257,4 +257,44 @@ describe('WebhookHandler', () => {
       expect(handler.isTriggerMatch('')).toBe(false)
     })
   })
+
+  describe('no trigger code (respond to all messages)', () => {
+    function createHandlerWithoutTrigger() {
+      return createWebhookHandler({
+        triggerCode: undefined,
+        messages,
+        sender: mockSender,
+        logger: mockLogger
+      })
+    }
+
+    it('should respond to any text message when no trigger code set', async () => {
+      const handler = createHandlerWithoutTrigger()
+      const payload = createValidWebhookPayload('any random message')
+
+      const result = await handler.handle(payload)
+
+      expect(result.handled).toBe(true)
+      expect(result.action).toBe('trigger_matched')
+      expect(mockSender.sendMessage).toHaveBeenCalled()
+    })
+
+    it('should respond to empty message when no trigger code set', async () => {
+      const handler = createHandlerWithoutTrigger()
+      const payload = createValidWebhookPayload('')
+
+      const result = await handler.handle(payload)
+
+      expect(result.handled).toBe(true)
+      expect(mockSender.sendMessage).toHaveBeenCalled()
+    })
+
+    it('isTriggerMatch should return true for any text when no trigger code', () => {
+      const handler = createHandlerWithoutTrigger()
+
+      expect(handler.isTriggerMatch('anything')).toBe(true)
+      expect(handler.isTriggerMatch('')).toBe(true)
+      expect(handler.isTriggerMatch('test-shop')).toBe(true)
+    })
+  })
 })
