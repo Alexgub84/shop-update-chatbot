@@ -28,6 +28,8 @@ jobs:
         run: npm run lint
 
       - name: Run tests
+        # Runs unit, integration, and e2e tests only
+        # Docker and production tests are excluded (require Docker daemon / real APIs)
         run: npm test
 
       - name: Build

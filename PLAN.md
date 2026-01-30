@@ -101,16 +101,21 @@ src/messages/
 └── en.json               # Bot messages (welcome, intent_prompt, etc.)
 
 tests/
-├── unit/
+├── unit/                 # Unit tests (mocked dependencies) - runs on CI
 │   ├── memory.test.ts    # MemoryManager tests
 │   ├── flow-controller.test.ts # FlowController tests
 │   ├── sender.test.ts    # Green API sender tests
 │   ├── woocommerce.test.ts # WooCommerce client tests
 │   └── webhook.test.ts   # Webhook handler tests
-├── e2e/
-│   └── e2e.test.ts       # Full flow tests
-├── docker/
-│   └── docker.test.ts    # Docker integration tests
+├── integration/          # Integration tests (mock HTTP servers) - runs on CI
+│   ├── woocommerce.test.ts # WooCommerce client integration
+│   └── woocommerce-server.ts # Mock WooCommerce server
+├── e2e/                  # E2E tests (full app with Fastify inject) - runs on CI
+│   └── e2e.test.ts       # Full webhook flow tests
+├── docker/               # Docker tests (requires Docker daemon) - local only
+│   └── docker.test.ts    # Container build & health tests
+├── prod/                 # Production tests (requires real APIs) - local only
+│   └── prod.test.ts      # Real Green API tests
 └── mocks/
     ├── greenapi.ts       # Mock factories for Green API
     └── woocommerce.ts    # Mock factories for WooCommerce
@@ -128,6 +133,14 @@ All modules use dependency injection for testability:
 - `flow-controller.ts` - accepts `{ memory, flow, messages, triggerCode?, logger }` (all mockable)
 - `memory.ts` - implements `MemoryManager` interface (swappable with DB or mock)
 - `woocommerce/client.ts` - accepts `fetchFn` parameter (mock fetch in tests)
+
+### Test Commands
+
+| Command | Scope | Runs on CI |
+|---------|-------|------------|
+| `npm test` | unit + integration + e2e | ✅ Yes |
+| `npm run test:docker` | docker tests (requires Docker daemon) | ❌ No |
+| `npm run test:prod` | production tests (requires real APIs) | ❌ No |
 
 Run tests: `npm test` (70 tests)
 
