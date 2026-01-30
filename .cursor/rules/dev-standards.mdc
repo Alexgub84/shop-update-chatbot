@@ -82,6 +82,95 @@ When adding any external API call (WooCommerce, Green API, etc.):
 4. **Map errors to user-friendly messages** - Users should never see raw API errors
 5. **Verify success only AFTER API returns** - Never assume success before the call completes
 
+## Docker Testing
+
+Docker tests verify the containerized app works correctly. They run separately from unit tests (`npm run test:docker`).
+
+### Test Structure Pattern
+
+```typescript
+describe('Docker: Test Name (docker-test:unique-name)', () => {
+  const TEST_NAME = 'UNIQUE-NAME'
+  const CONTAINER_NAME = 'app-unique-test'
+  const PORT = 3094  // Use unique port per test suite
+
+  // Optional: mock server for external APIs
+  let mockServer: MockServer
+
+  beforeAll(async () => {
+    execSilent(`docker rm -f ${CONTAINER_NAME}`)  // Cleanup existing
+    // Start mock servers if needed
+    mockServer = createMockServer(PORT + 1)
+    await mockServer.start()
+  }, 10000)
+
+  afterAll(async () => {
+    execSilent(`docker rm -f ${CONTAINER_NAME}`)
+    await mockServer?.stop()
+  }, 10000)
+
+  it('builds image', () => { /* ... */ }, 120000)  // Long timeout for build
+  it('starts container', async () => { /* ... */ }, 30000)
+  it('Step 1: ...', async () => { /* ... */ }, 10000)
+})
+```
+
+### Key Patterns
+
+1. **Unique ports per test suite** - Prevents port conflicts when tests run in parallel
+2. **Container cleanup in beforeAll AND afterAll** - Handles both fresh runs and interrupted runs
+3. **Use `host.docker.internal`** - Connect container to mock servers on host machine
+4. **Redirect stderr in exec**: `execSync(command + ' 2>&1', ...)` - Docker logs go to stderr
+5. **Wait for healthy** - Poll `/health` endpoint before running tests
+6. **Log steps** - Use `logStep(TEST_NAME, 'description')` for debugging
+
+### Mock Server for External APIs
+
+When testing flows that call external APIs (WooCommerce, etc.):
+
+```typescript
+// Start mock server on host BEFORE container
+mockWooServer = createMockWooCommerceServer(MOCK_PORT)
+mockWooServer.setAuthCredentials('ck_test', 'cs_test')
+await mockWooServer.start()
+
+// Point container to mock via host.docker.internal
+exec(`docker run -d \
+  -e WOOCOMMERCE_STORE_URL=http://host.docker.internal:${MOCK_PORT} \
+  -e WOOCOMMERCE_CONSUMER_KEY=ck_test \
+  ...`)
+```
+
+### Helper Functions
+
+```typescript
+// Execute command and capture output (including stderr)
+function exec(command: string): string {
+  return execSync(command + ' 2>&1', { encoding: 'utf-8', stdio: 'pipe' })
+}
+
+// Execute silently, return success boolean
+function execSilent(command: string): boolean {
+  try {
+    execSync(command, { encoding: 'utf-8', stdio: 'pipe' })
+    return true
+  } catch { return false }
+}
+
+// Wait for container to become healthy
+async function waitForHealthy(url: string, timeoutMs: number): Promise<boolean> {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const response = await fetch(url)
+      if (response.ok) return true
+    } catch {}
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+  return false
+}
+```
+
 ## Logging (Pino)
 
 | Level | Use |

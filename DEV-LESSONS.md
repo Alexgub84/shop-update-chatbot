@@ -8,6 +8,22 @@ A log of mistakes, bugs, and issues we've encountered with their solutions.
 
 <!-- Add new entries at the top -->
 
+### [Test] Docker Tests Need Mock Servers for External APIs
+**Date:** 2026-01-31
+**Problem:** Docker tests that call external APIs (WooCommerce) failed because container couldn't reach real API or fake URL returned 405
+**Solution:** Start mock server on host machine before container, then point container to it via `WOOCOMMERCE_STORE_URL=http://host.docker.internal:PORT`
+**Prevention:** When adding Docker tests that involve external API calls, always: (1) use mock server on host, (2) use `host.docker.internal` to connect, (3) set matching auth credentials on mock server and container env vars
+
+---
+
+### [Test] Docker Test Port Conflicts
+**Date:** 2026-01-31
+**Problem:** Docker tests failed intermittently due to port already in use when multiple test suites ran
+**Solution:** Assign unique port numbers to each test suite (e.g., 3094, 3095, 3096) and unique container names
+**Prevention:** When adding new Docker test suites, always use unique PORT and CONTAINER_NAME constants that don't conflict with existing tests
+
+---
+
 ### [Test] Always Test API Error Scenarios with Real Responses
 **Date:** 2026-01-31
 **Problem:** Unit tests for API clients may miss edge cases if error response formats are assumed rather than verified against real API responses
