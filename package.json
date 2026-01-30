@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "test": "npm run lint && vitest run",
     "test:watch": "vitest",
-    "test:prod": "vitest run tests/prod/",
+    "test:prod": "vitest run --config vitest.config.prod.ts",
     "lint": "tsc --noEmit"
   },
   "engines": {
