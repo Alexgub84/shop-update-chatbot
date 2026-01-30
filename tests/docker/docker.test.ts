@@ -51,6 +51,22 @@ function createWebhookPayload(text: string, chatId: string) {
   }
 }
 
+function createButtonResponsePayload(buttonId: string, chatId: string) {
+  return {
+    typeWebhook: 'incomingMessageReceived',
+    instanceData: { idInstance: 123, wid: 'bot@c.us' },
+    senderData: { chatId, sender: chatId },
+    messageData: {
+      typeMessage: 'interactiveButtonsResponse',
+      interactiveButtonsResponse: {
+        selectedButtonId: buttonId,
+        selectedButtonText: 'Button Text'
+      }
+    },
+    idMessage: `MSG-BTN-${Date.now()}`
+  }
+}
+
 describe('Docker: Production Health (docker-test:production-health)', () => {
   const TEST_NAME = 'PRODUCTION-HEALTH'
 
@@ -207,8 +223,8 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - List Click (docker-test:fake-gre
     logStep(TEST_NAME, 'FAKE GreenAPI: Verified interactive buttons were sent (List Products, Add New Product)')
   }, 10000)
 
-  it('Step 2: Click "List" button - verify flow continues with action', async () => {
-    logStep(TEST_NAME, 'FAKE GreenAPI: Simulating click on "List" button (sending "list")')
+  it('Step 2: Click "List" button via text input - verify flow continues with action', async () => {
+    logStep(TEST_NAME, 'FAKE GreenAPI: Simulating click on "List" button (sending text "list")')
     
     const response = await fetch(`http://localhost:${FAKE_GREENAPI_PORT}/webhook`, {
       method: 'POST',
@@ -220,7 +236,7 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - List Click (docker-test:fake-gre
     expect(response.status).toBe(200)
     expect(body.ok).toBe(true)
     expect(body.handled).toBe(true)
-    logStep(TEST_NAME, 'FAKE GreenAPI: "List" button click processed successfully')
+    logStep(TEST_NAME, 'FAKE GreenAPI: "List" text input processed successfully')
 
     await new Promise(resolve => setTimeout(resolve, 500))
 
@@ -231,6 +247,42 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - List Click (docker-test:fake-gre
     expect(logs).toContain('action_triggered')
     expect(logs).toContain('listProducts')
     logStep(TEST_NAME, 'FAKE GreenAPI: Verified flow continued - listProducts action was triggered')
-    logStep(TEST_NAME, 'FAKE GreenAPI: WhatsApp flow test completed successfully!')
   }, 10000)
+
+  it('Step 3: Re-trigger flow and click "Add" via actual button response payload', async () => {
+    const BUTTON_TEST_CHAT_ID = 'button-response-test@c.us'
+    
+    logStep(TEST_NAME, 'FAKE GreenAPI: Re-triggering flow for button response test')
+    const triggerResponse = await fetch(`http://localhost:${FAKE_GREENAPI_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('test-shop', BUTTON_TEST_CHAT_ID))
+    })
+    expect(triggerResponse.status).toBe(200)
+    
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    logStep(TEST_NAME, 'FAKE GreenAPI: Sending actual interactiveButtonsResponse payload (buttonId: "add")')
+    const buttonResponse = await fetch(`http://localhost:${FAKE_GREENAPI_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createButtonResponsePayload('add', BUTTON_TEST_CHAT_ID))
+    })
+    const body = await buttonResponse.json()
+
+    expect(buttonResponse.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.handled).toBe(true)
+    logStep(TEST_NAME, 'FAKE GreenAPI: Button response payload processed successfully')
+
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    logStep(TEST_NAME, 'FAKE GreenAPI: Checking logs for interactiveButtonsResponse handling')
+    const logs = exec(`docker logs ${FAKE_GREENAPI_CONTAINER}`)
+    
+    expect(logs).toContain('interactiveButtonsResponse')
+    expect(logs).toContain('choice_selected')
+    logStep(TEST_NAME, 'FAKE GreenAPI: Verified interactiveButtonsResponse was handled correctly')
+    logStep(TEST_NAME, 'FAKE GreenAPI: WhatsApp flow test completed successfully!')
+  }, 15000)
 })

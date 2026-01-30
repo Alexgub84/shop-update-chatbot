@@ -1,0 +1,27 @@
+---
+description: Bump package version on every commit
+alwaysApply: true
+---
+
+# Version Bump on Commit
+
+## Rule
+
+Before creating any git commit, bump the version in `package.json`:
+
+1. **Analyze changes** to determine version type:
+   - **Major** (x.0.0): Breaking changes, API changes, major refactors
+   - **Minor** (0.x.0): New features, non-breaking additions
+   - **Patch** (0.0.x): Bug fixes, documentation, small improvements
+
+2. **When unsure**, always ask:
+   > "Should this be a **minor** or **major** version bump? Changes include: [brief summary]"
+
+3. **Update version** in `package.json` before committing
+
+## Commit Flow
+
+1. Analyze staged changes
+2. Determine/ask version bump type
+3. Update `package.json` version
+4. Include version bump in the commit

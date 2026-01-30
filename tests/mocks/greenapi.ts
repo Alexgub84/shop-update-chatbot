@@ -47,3 +47,36 @@ export function createImageWebhookPayload() {
     idMessage: 'ABC123'
   }
 }
+
+export function createButtonsResponsePayload(buttonId: string) {
+  return {
+    typeWebhook: 'incomingMessageReceived',
+    instanceData: { idInstance: 123, wid: '123456789@c.us' },
+    senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
+    messageData: {
+      typeMessage: 'buttonsResponseMessage',
+      buttonsResponseMessage: {
+        selectedButtonId: buttonId,
+        selectedButtonText: 'Button Text',
+        stanzaId: 'original-msg-id'
+      }
+    },
+    idMessage: 'ABC123'
+  }
+}
+
+export function createInteractiveButtonsResponsePayload(buttonId: string) {
+  return {
+    typeWebhook: 'incomingMessageReceived',
+    instanceData: { idInstance: 123, wid: '123456789@c.us' },
+    senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
+    messageData: {
+      typeMessage: 'interactiveButtonsResponse',
+      interactiveButtonsResponse: {
+        selectedButtonId: buttonId,
+        selectedButtonText: 'Button Text'
+      }
+    },
+    idMessage: 'ABC123'
+  }
+}

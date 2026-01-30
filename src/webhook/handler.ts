@@ -2,7 +2,7 @@ import { WebhookError } from '../errors.js'
 import type { Logger } from '../logger.js'
 import type { GreenApiSender } from '../greenapi/sender.js'
 import type { FlowController } from '../conversation/flow-controller.js'
-import { incomingMessageSchema, type IncomingMessage } from './types.js'
+import { incomingMessageSchema, extractMessageContent, type IncomingMessage } from './types.js'
 
 export interface WebhookHandlerDeps {
   flowController: FlowController
@@ -12,7 +12,7 @@ export interface WebhookHandlerDeps {
 
 export interface WebhookHandlerResult {
   handled: boolean
-  action?: 'flow_processed' | 'ignored_non_text' | 'ignored_webhook_type'
+  action?: 'flow_processed' | 'ignored_unsupported' | 'ignored_webhook_type'
 }
 
 export function createWebhookHandler(deps: WebhookHandlerDeps) {
@@ -31,13 +31,14 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
   async function handle(body: unknown): Promise<WebhookHandlerResult> {
     const payload = parsePayload(body)
 
-    const messageContent = payload.messageData.textMessageData?.textMessage ?? null
+    const messageContent = extractMessageContent(payload)
 
     logger.info({
       event: 'webhook_received',
       chatId: payload.senderData.chatId,
       messageId: payload.idMessage,
       typeWebhook: payload.typeWebhook,
+      typeMessage: payload.messageData.typeMessage,
       messageContent
     })
 
@@ -46,17 +47,17 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
       return { handled: false, action: 'ignored_webhook_type' }
     }
 
-    if (payload.messageData.typeMessage !== 'textMessage') {
+    if (messageContent === null) {
       logger.warn({
-        event: 'ignored_non_text',
+        event: 'ignored_unsupported',
         typeMessage: payload.messageData.typeMessage,
         chatId: payload.senderData.chatId
       })
-      return { handled: false, action: 'ignored_non_text' }
+      return { handled: false, action: 'ignored_unsupported' }
     }
 
     const chatId = payload.senderData.chatId
-    const result = flowController.process(chatId, messageContent ?? '')
+    const result = flowController.process(chatId, messageContent)
 
     if (!result.handled) {
       logger.info({ event: 'flow_not_handled', chatId })

@@ -8,6 +8,22 @@ A log of mistakes, bugs, and issues we've encountered with their solutions.
 
 <!-- Add new entries at the top -->
 
+### [Test] Simulate Real Payloads, Not Shortcuts
+**Date:** 2026-01-30
+**Problem:** Docker test simulated button click by sending text `"list"` instead of actual `interactiveButtonsResponse` payload - test passed but production failed
+**Solution:** Added `createButtonResponsePayload()` helper and Step 3 test that sends real `interactiveButtonsResponse` webhook payload
+**Prevention:** Integration tests must use payloads that match actual third-party API formats. Don't use shortcuts (like sending text) to simulate user actions
+
+---
+
+### [Logic] Button Responses Ignored by Webhook Handler
+**Date:** 2026-01-30
+**Problem:** WhatsApp button clicks (`interactiveButtonsResponse`) were ignored because handler only accepted `textMessage` type
+**Solution:** Updated `extractMessageContent()` in `types.ts` to handle `buttonsResponseMessage` and `interactiveButtonsResponse` message types, extracting `selectedButtonId` as the user input
+**Prevention:** When integrating with third-party APIs, test all interaction types (not just text). Check API docs for all webhook payload variations
+
+---
+
 ### [Config] Version Bump on Every Commit
 **Date:** 2026-01-30
 **Problem:** Package version not updated consistently, making it hard to track releases and changes

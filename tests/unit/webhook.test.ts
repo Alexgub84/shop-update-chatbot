@@ -7,7 +7,9 @@ import {
   createMockSender,
   createMockLogger,
   createValidWebhookPayload,
-  createImageWebhookPayload
+  createImageWebhookPayload,
+  createButtonsResponsePayload,
+  createInteractiveButtonsResponsePayload
 } from '../mocks/greenapi.js'
 
 describe('WebhookHandler', () => {
@@ -125,7 +127,7 @@ describe('WebhookHandler', () => {
       })
     })
 
-    describe('non-text messages', () => {
+    describe('unsupported message types', () => {
       it('should ignore image messages and not call flow', async () => {
         const handler = createHandler()
         const payload = createImageWebhookPayload()
@@ -133,12 +135,12 @@ describe('WebhookHandler', () => {
         const result = await handler.handle(payload)
 
         expect(result.handled).toBe(false)
-        expect(result.action).toBe('ignored_non_text')
+        expect(result.action).toBe('ignored_unsupported')
         expect(mockFlowController.process).not.toHaveBeenCalled()
         expect(mockSender.sendMessage).not.toHaveBeenCalled()
       })
 
-      it('should log warning for non-text messages', async () => {
+      it('should log warning for unsupported message types', async () => {
         const handler = createHandler()
         const payload = createImageWebhookPayload()
 
@@ -146,9 +148,51 @@ describe('WebhookHandler', () => {
 
         expect(mockLogger.warn).toHaveBeenCalledWith(
           expect.objectContaining({
-            event: 'ignored_non_text',
+            event: 'ignored_unsupported',
             typeMessage: 'imageMessage'
           })
+        )
+      })
+    })
+
+    describe('button responses', () => {
+      it('should process buttonsResponseMessage and extract selectedButtonId', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'You selected list' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler()
+        const payload = createButtonsResponsePayload('list')
+
+        const result = await handler.handle(payload)
+
+        expect(result.handled).toBe(true)
+        expect(mockFlowController.process).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'list'
+        )
+        expect(mockSender.sendMessage).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'You selected list'
+        )
+      })
+
+      it('should process interactiveButtonsResponse and extract selectedButtonId', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'You selected add' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler()
+        const payload = createInteractiveButtonsResponsePayload('add')
+
+        const result = await handler.handle(payload)
+
+        expect(result.handled).toBe(true)
+        expect(mockFlowController.process).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'add'
+        )
+        expect(mockSender.sendMessage).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'You selected add'
         )
       })
     })
