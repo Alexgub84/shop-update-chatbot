@@ -83,6 +83,41 @@ curl -X POST http://localhost:3000/webhook \
   }'
 ```
 
+## Deployment (Railway via GitHub Actions)
+
+### Prerequisites
+
+1. Create a project on [Railway](https://railway.app)
+2. Generate an API token: Railway Dashboard → Account Settings → Tokens
+
+### GitHub Secrets
+
+Add this secret to your GitHub repository (Settings → Secrets → Actions):
+
+| Secret | Description |
+|--------|-------------|
+| `RAILWAY_TOKEN` | Project token from Railway (Project → Settings → Tokens) |
+
+### Railway Environment Variables
+
+Configure these in Railway Dashboard → Service → Variables:
+
+```
+PORT=3000
+LOG_LEVEL=info
+MOCK_MODE=false
+TRIGGER_CODE=test-shop
+GREEN_API_INSTANCE_ID=your_instance_id
+GREEN_API_TOKEN=your_api_token
+```
+
+### Deploy
+
+Push to `main` or `master` branch triggers automatic deployment:
+
+1. CI runs lint, tests, and build
+2. On success, deploys to Railway
+
 ## Project Structure
 
 ```

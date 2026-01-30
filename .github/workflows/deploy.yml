@@ -34,7 +34,7 @@ jobs:
         run: npm run build
 
   deploy:
-    name: Deploy
+    name: Deploy to Railway
     needs: test
     runs-on: ubuntu-latest
 
@@ -42,5 +42,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Placeholder for deployment
-        run: echo "Add deployment configuration here"
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

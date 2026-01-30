@@ -33,6 +33,10 @@ A working production-ready app that:
 ### Pending
 (none)
 
+### Deployment
+- [x] GitHub Actions workflow for Railway deployment
+- [x] Railway configuration (railway.json)
+
 ---
 
 ## Step 1 Complete
