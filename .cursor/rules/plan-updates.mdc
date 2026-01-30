@@ -27,11 +27,13 @@ When the user provides new instructions or requirements during work:
 2. **Update basic-instructions.md**: If it changes core requirements or specifications
 3. **Update messages/en.json**: If new bot messages are needed
 4. **Update .env.example**: If new environment variables are added
+5. **Update DEV-LESSONS.md**: If a bug was fixed or a lesson was learned
 
 ## Source of Truth
 
 - `PLAN.md` - Current progress and implementation plan
 - `basic-instructions.md` - Full project requirements and specifications
 - `messages/en.json` - All user-facing bot messages
+- `DEV-LESSONS.md` - Lessons learned from bugs and mistakes
 
 Keep all documentation in sync with actual implementation.

@@ -2,10 +2,18 @@ import { z } from 'zod'
 import { ConfigError } from './errors.js'
 import { logger } from './logger.js'
 
+const booleanFromString = z
+  .union([z.boolean(), z.string()])
+  .transform((val) => {
+    if (typeof val === 'boolean') return val
+    return val.toLowerCase() === 'true'
+  })
+  .default(false)
+
 const configSchema = z.object({
   port: z.coerce.number().int().min(1).max(65535).default(3000),
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  mockMode: z.coerce.boolean().default(false),
+  mockMode: booleanFromString,
   triggerCode: z.string().min(1).optional(),
   greenApi: z.object({
     instanceId: z.string({ required_error: 'GREEN_API_INSTANCE_ID is required' }).min(1, 'GREEN_API_INSTANCE_ID cannot be empty'),
