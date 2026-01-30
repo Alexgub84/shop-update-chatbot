@@ -1,3 +1,6 @@
 {
-  "welcome": "Welcome to the shop inventory update bot"
+  "welcome": "Welcome to Shop Manager!",
+  "intent_prompt": "What would you like to do?\n\n1️⃣ List Products\n2️⃣ Add New Product",
+  "invalid_choice": "Please reply with 1 or 2",
+  "session_expired": "Session expired. Send trigger to start again."
 }

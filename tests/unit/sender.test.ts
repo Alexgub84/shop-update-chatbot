@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createGreenApiSender } from '../../src/greenapi/sender.js'
+import { createGreenApiSender, type SendButtonsParams } from '../../src/greenapi/sender.js'
 import { GreenApiError } from '../../src/errors.js'
 
 describe('GreenApiSender', () => {
@@ -136,6 +136,112 @@ describe('GreenApiSender', () => {
         statusCode: 403,
         body: 'Forbidden'
       })
+    })
+  })
+
+  describe('sendButtons', () => {
+    const buttonParams: SendButtonsParams = {
+      chatId: '123@c.us',
+      body: 'Choose an option',
+      buttons: [
+        { buttonId: '1', buttonText: 'Option 1' },
+        { buttonId: '2', buttonText: 'Option 2' }
+      ]
+    }
+
+    it('should send buttons successfully', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ idMessage: 'btn123' })
+      })
+
+      const sender = createGreenApiSender(config, mockLogger, mockFetch)
+      const result = await sender.sendButtons(buttonParams)
+
+      expect(result.idMessage).toBe('btn123')
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.green-api.com/waInstancetest123/sendInteractiveButtonsReply/token456',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chatId: '123@c.us',
+            body: 'Choose an option',
+            buttons: [
+              { buttonId: '1', buttonText: 'Option 1' },
+              { buttonId: '2', buttonText: 'Option 2' }
+            ]
+          })
+        }
+      )
+    })
+
+    it('should include optional header and footer', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ idMessage: 'btn123' })
+      })
+
+      const paramsWithExtras: SendButtonsParams = {
+        ...buttonParams,
+        header: 'Header Text',
+        footer: 'Footer Text'
+      }
+
+      const sender = createGreenApiSender(config, mockLogger, mockFetch)
+      await sender.sendButtons(paramsWithExtras)
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+      expect(callBody.header).toBe('Header Text')
+      expect(callBody.footer).toBe('Footer Text')
+    })
+
+    it('should log success event', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ idMessage: 'btn123' })
+      })
+
+      const sender = createGreenApiSender(config, mockLogger, mockFetch)
+      await sender.sendButtons(buttonParams)
+
+      expect(mockLogger.info).toHaveBeenCalledWith({
+        event: 'greenapi_send_buttons_start',
+        chatId: '123@c.us',
+        buttonCount: 2
+      })
+      expect(mockLogger.info).toHaveBeenCalledWith({
+        event: 'greenapi_send_buttons_success',
+        chatId: '123@c.us',
+        idMessage: 'btn123'
+      })
+    })
+
+    it('should throw GreenApiError on network error', async () => {
+      const networkError = new Error('Connection refused')
+      const mockFetch = vi.fn().mockRejectedValue(networkError)
+
+      const sender = createGreenApiSender(config, mockLogger, mockFetch)
+
+      await expect(sender.sendButtons(buttonParams))
+        .rejects.toThrow(GreenApiError)
+      await expect(sender.sendButtons(buttonParams))
+        .rejects.toThrow(/Network error/)
+    })
+
+    it('should throw GreenApiError on API error response', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Forbidden'
+      })
+
+      const sender = createGreenApiSender(config, mockLogger, mockFetch)
+
+      await expect(sender.sendButtons(buttonParams))
+        .rejects.toThrow(GreenApiError)
+      await expect(sender.sendButtons(buttonParams))
+        .rejects.toThrow(/Green API error: 403/)
     })
   })
 })

@@ -18,6 +18,34 @@ Before writing code, output a concise plan:
 2. **Wait for Approval**: Do not write implementation yet
 3. **One by One**: Implement each function individually after approval
 
+## Service Architecture (Dependency Injection)
+
+All services must be injectable for testing and future swappability:
+
+1. **Interface in `types.ts`**: Define the contract (what methods exist)
+2. **Implementation in separate file**: Create factory function returning the interface
+3. **Inject via `app.ts`**: Wire dependencies in the app container
+4. **Tests use mocks**: Pass fake implementations for unit testing
+
+Example pattern:
+```typescript
+// types.ts - contract
+export interface MemoryManager {
+  get(chatId: string): Session | undefined
+  set(chatId: string, session: Session): void
+}
+
+// memory.ts - implementation
+export function createInMemoryManager(timeoutMs: number): MemoryManager { ... }
+
+// app.ts - wiring
+const memory = createInMemoryManager(config.sessionTimeoutMs)
+const flowController = createFlowController({ memory, ... })
+
+// test - mock
+const fakeMemory: MemoryManager = { get: vi.fn(), set: vi.fn() }
+```
+
 ## Code Quality
 
 - No comments in code (exception: explain complex "Why" logic)

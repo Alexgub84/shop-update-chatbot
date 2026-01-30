@@ -1,0 +1,36 @@
+{
+  "id": "inventory",
+  "initialStep": "awaiting_trigger",
+  "sessionTimeoutMs": 300000,
+  "steps": {
+    "awaiting_trigger": {
+      "type": "trigger",
+      "onMatch": { "nextStep": "awaiting_intent", "messageKey": "welcome" },
+      "onNoMatch": { "handled": false }
+    },
+    "awaiting_intent": {
+      "type": "choice",
+      "responseType": "text",
+      "messageKey": "intent_prompt",
+      "options": [
+        { "id": "list", "label": "List Products", "aliases": ["1", "list", "list products"] },
+        { "id": "add", "label": "Add New Product", "aliases": ["2", "add", "add new product"] }
+      ],
+      "transitions": {
+        "list": { "nextStep": "list_products" },
+        "add": { "nextStep": "add_product" }
+      },
+      "onInvalid": { "messageKey": "invalid_choice", "nextStep": "awaiting_intent" }
+    },
+    "list_products": {
+      "type": "action",
+      "action": "listProducts",
+      "nextStep": "awaiting_intent"
+    },
+    "add_product": {
+      "type": "action",
+      "action": "addProduct",
+      "nextStep": "awaiting_intent"
+    }
+  }
+}

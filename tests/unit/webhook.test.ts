@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createWebhookHandler } from '../../src/webhook/handler.js'
 import { WebhookError } from '../../src/errors.js'
+import type { FlowController } from '../../src/conversation/flow-controller.js'
+import type { FlowResult } from '../../src/conversation/types.js'
 import {
   createMockSender,
   createMockLogger,
@@ -9,86 +11,122 @@ import {
 } from '../mocks/greenapi.js'
 
 describe('WebhookHandler', () => {
-  const triggerCode = 'test-shop'
-  const messages = { welcome: 'Welcome to the shop inventory update bot' }
-
   let mockSender: ReturnType<typeof createMockSender>
   let mockLogger: ReturnType<typeof createMockLogger>
+  let mockFlowController: FlowController
 
   beforeEach(() => {
     mockSender = createMockSender()
     mockLogger = createMockLogger()
+    mockFlowController = {
+      process: vi.fn()
+    }
   })
 
   function createHandler() {
     return createWebhookHandler({
-      triggerCode,
-      messages,
+      flowController: mockFlowController,
       sender: mockSender,
       logger: mockLogger
     })
   }
 
   describe('handle', () => {
-    describe('trigger matching', () => {
-      it('should respond with welcome when message equals trigger code', async () => {
+    describe('flow processing', () => {
+      it('should call flowController.process with chatId and message', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'Welcome!' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler()
+        const payload = createValidWebhookPayload('test-shop')
+
+        await handler.handle(payload)
+
+        expect(mockFlowController.process).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'test-shop'
+        )
+      })
+
+      it('should send text message when flow returns response', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'Welcome!' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
         const handler = createHandler()
         const payload = createValidWebhookPayload('test-shop')
 
         const result = await handler.handle(payload)
 
         expect(result.handled).toBe(true)
-        expect(result.action).toBe('trigger_matched')
+        expect(result.action).toBe('flow_processed')
         expect(mockSender.sendMessage).toHaveBeenCalledWith(
           '987654321@c.us',
-          'Welcome to the shop inventory update bot'
+          'Welcome!'
         )
       })
 
-      it('should match trigger case-insensitively', async () => {
+      it('should send buttons when flow returns buttons', async () => {
+        const flowResult: FlowResult = {
+          handled: true,
+          buttons: {
+            body: 'Choose an option',
+            options: [
+              { buttonId: '1', buttonText: 'Option 1' },
+              { buttonId: '2', buttonText: 'Option 2' }
+            ],
+            header: 'Welcome!'
+          }
+        }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
         const handler = createHandler()
-        const payload = createValidWebhookPayload('TEST-SHOP')
+        const payload = createValidWebhookPayload('test-shop')
 
         const result = await handler.handle(payload)
 
         expect(result.handled).toBe(true)
-        expect(mockSender.sendMessage).toHaveBeenCalled()
+        expect(mockSender.sendButtons).toHaveBeenCalledWith({
+          chatId: '987654321@c.us',
+          body: 'Choose an option',
+          buttons: [
+            { buttonId: '1', buttonText: 'Option 1' },
+            { buttonId: '2', buttonText: 'Option 2' }
+          ],
+          header: 'Welcome!',
+          footer: undefined
+        })
       })
 
-      it('should match trigger with leading/trailing whitespace', async () => {
+      it('should not send any message when flow returns handled=false', async () => {
+        const flowResult: FlowResult = { handled: false }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
         const handler = createHandler()
-        const payload = createValidWebhookPayload('  test-shop  ')
-
-        const result = await handler.handle(payload)
-
-        expect(result.handled).toBe(true)
-        expect(mockSender.sendMessage).toHaveBeenCalled()
-      })
-
-      it('should not respond when message does not match trigger', async () => {
-        const handler = createHandler()
-        const payload = createValidWebhookPayload('hello world')
-
-        const result = await handler.handle(payload)
-
-        expect(result.handled).toBe(false)
-        expect(result.action).toBe('ignored_non_trigger')
-        expect(mockSender.sendMessage).not.toHaveBeenCalled()
-      })
-
-      it('should not respond to partial trigger match', async () => {
-        const handler = createHandler()
-        const payload = createValidWebhookPayload('test-shop hello')
+        const payload = createValidWebhookPayload('random message')
 
         const result = await handler.handle(payload)
 
         expect(result.handled).toBe(false)
         expect(mockSender.sendMessage).not.toHaveBeenCalled()
+        expect(mockSender.sendButtons).not.toHaveBeenCalled()
+      })
+
+      it('should not send message when flow returns no response or buttons', async () => {
+        const flowResult: FlowResult = { handled: true }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler()
+        const payload = createValidWebhookPayload('test')
+
+        await handler.handle(payload)
+
+        expect(mockSender.sendMessage).not.toHaveBeenCalled()
+        expect(mockSender.sendButtons).not.toHaveBeenCalled()
       })
     })
 
     describe('non-text messages', () => {
-      it('should ignore image messages and not respond', async () => {
+      it('should ignore image messages and not call flow', async () => {
         const handler = createHandler()
         const payload = createImageWebhookPayload()
 
@@ -96,6 +134,7 @@ describe('WebhookHandler', () => {
 
         expect(result.handled).toBe(false)
         expect(result.action).toBe('ignored_non_text')
+        expect(mockFlowController.process).not.toHaveBeenCalled()
         expect(mockSender.sendMessage).not.toHaveBeenCalled()
       })
 
@@ -126,7 +165,7 @@ describe('WebhookHandler', () => {
 
         expect(result.handled).toBe(false)
         expect(result.action).toBe('ignored_webhook_type')
-        expect(mockSender.sendMessage).not.toHaveBeenCalled()
+        expect(mockFlowController.process).not.toHaveBeenCalled()
       })
     })
 
@@ -184,6 +223,9 @@ describe('WebhookHandler', () => {
 
     describe('logging', () => {
       it('should log webhook received event', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'OK' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
         const handler = createHandler()
         const payload = createValidWebhookPayload('test-shop')
 
@@ -198,7 +240,10 @@ describe('WebhookHandler', () => {
         )
       })
 
-      it('should log trigger matched event', async () => {
+      it('should log flow processed event', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'OK' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
         const handler = createHandler()
         const payload = createValidWebhookPayload('test-shop')
 
@@ -206,95 +251,29 @@ describe('WebhookHandler', () => {
 
         expect(mockLogger.info).toHaveBeenCalledWith(
           expect.objectContaining({
-            event: 'trigger_matched',
-            chatId: '987654321@c.us'
+            event: 'flow_processed',
+            chatId: '987654321@c.us',
+            handled: true
           })
         )
       })
 
-      it('should log ignored non-trigger event', async () => {
+      it('should log flow not handled event', async () => {
+        const flowResult: FlowResult = { handled: false }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
         const handler = createHandler()
-        const payload = createValidWebhookPayload('random message')
+        const payload = createValidWebhookPayload('random')
 
         await handler.handle(payload)
 
         expect(mockLogger.info).toHaveBeenCalledWith(
           expect.objectContaining({
-            event: 'ignored_non_trigger',
+            event: 'flow_not_handled',
             chatId: '987654321@c.us'
           })
         )
       })
-    })
-  })
-
-  describe('isTriggerMatch', () => {
-    it('should return true for exact match', () => {
-      const handler = createHandler()
-
-      expect(handler.isTriggerMatch('test-shop')).toBe(true)
-    })
-
-    it('should return true for case-insensitive match', () => {
-      const handler = createHandler()
-
-      expect(handler.isTriggerMatch('TEST-SHOP')).toBe(true)
-      expect(handler.isTriggerMatch('Test-Shop')).toBe(true)
-    })
-
-    it('should return true with whitespace trimmed', () => {
-      const handler = createHandler()
-
-      expect(handler.isTriggerMatch('  test-shop  ')).toBe(true)
-      expect(handler.isTriggerMatch('\ntest-shop\t')).toBe(true)
-    })
-
-    it('should return false for non-matching text', () => {
-      const handler = createHandler()
-
-      expect(handler.isTriggerMatch('hello')).toBe(false)
-      expect(handler.isTriggerMatch('test-shop extra')).toBe(false)
-      expect(handler.isTriggerMatch('')).toBe(false)
-    })
-  })
-
-  describe('no trigger code (respond to all messages)', () => {
-    function createHandlerWithoutTrigger() {
-      return createWebhookHandler({
-        triggerCode: undefined,
-        messages,
-        sender: mockSender,
-        logger: mockLogger
-      })
-    }
-
-    it('should respond to any text message when no trigger code set', async () => {
-      const handler = createHandlerWithoutTrigger()
-      const payload = createValidWebhookPayload('any random message')
-
-      const result = await handler.handle(payload)
-
-      expect(result.handled).toBe(true)
-      expect(result.action).toBe('trigger_matched')
-      expect(mockSender.sendMessage).toHaveBeenCalled()
-    })
-
-    it('should respond to empty message when no trigger code set', async () => {
-      const handler = createHandlerWithoutTrigger()
-      const payload = createValidWebhookPayload('')
-
-      const result = await handler.handle(payload)
-
-      expect(result.handled).toBe(true)
-      expect(mockSender.sendMessage).toHaveBeenCalled()
-    })
-
-    it('isTriggerMatch should return true for any text when no trigger code', () => {
-      const handler = createHandlerWithoutTrigger()
-
-      expect(handler.isTriggerMatch('anything')).toBe(true)
-      expect(handler.isTriggerMatch('')).toBe(true)
-      expect(handler.isTriggerMatch('test-shop')).toBe(true)
     })
   })
 })

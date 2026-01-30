@@ -1,24 +1,22 @@
-import { z } from 'zod'
 import { WebhookError } from '../errors.js'
 import type { Logger } from '../logger.js'
-import type { Messages } from '../messages.js'
 import type { GreenApiSender } from '../greenapi/sender.js'
+import type { FlowController } from '../conversation/flow-controller.js'
 import { incomingMessageSchema, type IncomingMessage } from './types.js'
 
 export interface WebhookHandlerDeps {
-  triggerCode?: string
-  messages: Messages
+  flowController: FlowController
   sender: GreenApiSender
   logger: Logger
 }
 
 export interface WebhookHandlerResult {
   handled: boolean
-  action?: 'trigger_matched' | 'ignored_non_trigger' | 'ignored_non_text' | 'ignored_webhook_type'
+  action?: 'flow_processed' | 'ignored_non_text' | 'ignored_webhook_type'
 }
 
 export function createWebhookHandler(deps: WebhookHandlerDeps) {
-  const { triggerCode, messages, sender, logger } = deps
+  const { flowController, sender, logger } = deps
 
   function parsePayload(body: unknown): IncomingMessage {
     const result = incomingMessageSchema.safeParse(body)
@@ -28,13 +26,6 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
       throw new WebhookError(`Invalid webhook payload: ${result.error.message}`, field)
     }
     return result.data
-  }
-
-  function isTriggerMatch(text: string): boolean {
-    if (!triggerCode) {
-      return true
-    }
-    return text.trim().toLowerCase() === triggerCode.toLowerCase()
   }
 
   async function handle(body: unknown): Promise<WebhookHandlerResult> {
@@ -64,25 +55,31 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
       return { handled: false, action: 'ignored_non_text' }
     }
 
-    if (!isTriggerMatch(messageContent ?? '')) {
-      logger.info({
-        event: 'ignored_non_trigger',
-        chatId: payload.senderData.chatId
-      })
-      return { handled: false, action: 'ignored_non_trigger' }
+    const chatId = payload.senderData.chatId
+    const result = flowController.process(chatId, messageContent ?? '')
+
+    if (!result.handled) {
+      logger.info({ event: 'flow_not_handled', chatId })
+      return { handled: false, action: 'flow_processed' }
     }
 
-    logger.info({
-      event: 'trigger_matched',
-      chatId: payload.senderData.chatId
-    })
+    if (result.buttons) {
+      await sender.sendButtons({
+        chatId,
+        body: result.buttons.body,
+        buttons: result.buttons.options,
+        header: result.buttons.header,
+        footer: result.buttons.footer
+      })
+    } else if (result.response) {
+      await sender.sendMessage(chatId, result.response)
+    }
 
-    await sender.sendMessage(payload.senderData.chatId, messages.welcome)
-
-    return { handled: true, action: 'trigger_matched' }
+    logger.info({ event: 'flow_processed', chatId, handled: result.handled })
+    return { handled: true, action: 'flow_processed' }
   }
 
-  return { handle, parsePayload, isTriggerMatch }
+  return { handle, parsePayload }
 }
 
 export type WebhookHandler = ReturnType<typeof createWebhookHandler>

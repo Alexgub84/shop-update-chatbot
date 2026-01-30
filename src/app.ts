@@ -3,14 +3,25 @@ import { createLogger, type Logger } from './logger.js'
 import { loadMessages, type Messages } from './messages.js'
 import { createGreenApiSender, createMockSender, type GreenApiSender } from './greenapi/sender.js'
 import { createWebhookHandler, type WebhookHandler } from './webhook/handler.js'
+import { createInMemoryManager } from './conversation/memory.js'
+import { createFlowController, type FlowController } from './conversation/flow-controller.js'
+import type { FlowDefinition, MemoryManager } from './conversation/types.js'
 import { createServer } from './server.js'
 import type { FastifyInstance } from 'fastify'
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 export interface AppDependencies {
   config: Config
   logger: Logger
   messages: Messages
   sender: GreenApiSender
+  memory: MemoryManager
+  flowController: FlowController
   webhookHandler: WebhookHandler
 }
 
@@ -19,10 +30,17 @@ export interface App {
   dependencies: AppDependencies
 }
 
+function loadFlow(): FlowDefinition {
+  const flowPath = join(__dirname, 'flows', 'inventory.json')
+  const flowContent = readFileSync(flowPath, 'utf-8')
+  return JSON.parse(flowContent) as FlowDefinition
+}
+
 export function createApp(): App {
   const config = loadConfig()
   const logger = createLogger('shop-update-chatbot')
   const messages = loadMessages()
+  const flow = loadFlow()
 
   const sender = config.mockMode
     ? createMockSender(logger)
@@ -32,19 +50,28 @@ export function createApp(): App {
     logger.warn({ event: 'mock_mode_enabled' })
   }
 
-  const webhookHandler = createWebhookHandler({
-    triggerCode: config.triggerCode,
+  const memory = createInMemoryManager(config.sessionTimeoutMs)
+
+  const flowController = createFlowController({
+    memory,
+    flow,
     messages,
+    triggerCode: config.triggerCode,
+    logger
+  })
+
+  const webhookHandler = createWebhookHandler({
+    flowController,
     sender,
     logger
   })
 
-  logger.info({ event: 'dependencies_loaded', messageKeys: Object.keys(messages) })
+  logger.info({ event: 'dependencies_loaded', messageKeys: Object.keys(messages), flowId: flow.id })
 
   const server = createServer(config, logger, webhookHandler)
 
   return {
     server,
-    dependencies: { config, logger, messages, sender, webhookHandler }
+    dependencies: { config, logger, messages, sender, memory, flowController, webhookHandler }
   }
 }

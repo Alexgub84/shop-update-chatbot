@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import type { FastifyInstance } from 'fastify'
-import { createApp } from '../../src/app.js'
+import { createApp, type App } from '../../src/app.js'
 
 describe('E2E: Webhook Flow', () => {
+  let app: App
   let server: FastifyInstance
+  let chatCounter = 0
 
   beforeAll(async () => {
     process.env.MOCK_MODE = 'true'
@@ -11,7 +13,7 @@ describe('E2E: Webhook Flow', () => {
     process.env.GREEN_API_INSTANCE_ID = 'test-instance'
     process.env.GREEN_API_TOKEN = 'test-token'
 
-    const app = createApp()
+    app = createApp()
     server = app.server
     await server.ready()
   })
@@ -20,21 +22,22 @@ describe('E2E: Webhook Flow', () => {
     await server.close()
   })
 
-  function createWebhookPayload(text: string) {
+  function createWebhookPayload(text: string, chatId?: string) {
+    const actualChatId = chatId ?? `user${++chatCounter}@c.us`
     return {
       typeWebhook: 'incomingMessageReceived',
       instanceData: { idInstance: 123, wid: 'bot@c.us' },
-      senderData: { chatId: 'user123@c.us', sender: 'user123@c.us' },
+      senderData: { chatId: actualChatId, sender: actualChatId },
       messageData: {
         typeMessage: 'textMessage',
         textMessageData: { textMessage: text }
       },
-      idMessage: `MSG-${Date.now()}`
+      idMessage: `MSG-${Date.now()}-${chatCounter}`
     }
   }
 
   describe('trigger message "test-shop"', () => {
-    it('should respond with welcome message when exact match', async () => {
+    it('should start session and return buttons when exact match', async () => {
       const response = await server.inject({
         method: 'POST',
         url: '/webhook',
@@ -45,10 +48,10 @@ describe('E2E: Webhook Flow', () => {
       const body = response.json()
       expect(body.ok).toBe(true)
       expect(body.handled).toBe(true)
-      expect(body.action).toBe('trigger_matched')
+      expect(body.action).toBe('flow_processed')
     })
 
-    it('should respond with welcome message when case differs', async () => {
+    it('should start session when trigger case differs', async () => {
       const response = await server.inject({
         method: 'POST',
         url: '/webhook',
@@ -58,10 +61,10 @@ describe('E2E: Webhook Flow', () => {
       expect(response.statusCode).toBe(200)
       const body = response.json()
       expect(body.handled).toBe(true)
-      expect(body.action).toBe('trigger_matched')
+      expect(body.action).toBe('flow_processed')
     })
 
-    it('should respond with welcome message when has whitespace', async () => {
+    it('should start session when trigger has whitespace', async () => {
       const response = await server.inject({
         method: 'POST',
         url: '/webhook',
@@ -71,12 +74,12 @@ describe('E2E: Webhook Flow', () => {
       expect(response.statusCode).toBe(200)
       const body = response.json()
       expect(body.handled).toBe(true)
-      expect(body.action).toBe('trigger_matched')
+      expect(body.action).toBe('flow_processed')
     })
   })
 
-  describe('non-trigger messages', () => {
-    it('should not respond to random text', async () => {
+  describe('non-trigger messages (no active session)', () => {
+    it('should not handle random text without active session', async () => {
       const response = await server.inject({
         method: 'POST',
         url: '/webhook',
@@ -87,10 +90,10 @@ describe('E2E: Webhook Flow', () => {
       const body = response.json()
       expect(body.ok).toBe(true)
       expect(body.handled).toBe(false)
-      expect(body.action).toBe('ignored_non_trigger')
+      expect(body.action).toBe('flow_processed')
     })
 
-    it('should not respond to partial trigger match', async () => {
+    it('should not handle partial trigger match', async () => {
       const response = await server.inject({
         method: 'POST',
         url: '/webhook',
@@ -100,20 +103,49 @@ describe('E2E: Webhook Flow', () => {
       expect(response.statusCode).toBe(200)
       const body = response.json()
       expect(body.handled).toBe(false)
-      expect(body.action).toBe('ignored_non_trigger')
+      expect(body.action).toBe('flow_processed')
     })
+  })
 
-    it('should not respond to empty message', async () => {
-      const response = await server.inject({
+  describe('multi-turn conversation', () => {
+    it('should process choice after trigger', async () => {
+      const chatId = 'multi-turn-user@c.us'
+
+      const triggerResponse = await server.inject({
         method: 'POST',
         url: '/webhook',
-        payload: createWebhookPayload('')
+        payload: createWebhookPayload('test-shop', chatId)
+      })
+      expect(triggerResponse.json().handled).toBe(true)
+
+      const choiceResponse = await server.inject({
+        method: 'POST',
+        url: '/webhook',
+        payload: createWebhookPayload('1', chatId)
+      })
+      expect(choiceResponse.statusCode).toBe(200)
+      const body = choiceResponse.json()
+      expect(body.handled).toBe(true)
+    })
+
+    it('should handle invalid choice and re-prompt', async () => {
+      const chatId = 'invalid-choice-user@c.us'
+
+      await server.inject({
+        method: 'POST',
+        url: '/webhook',
+        payload: createWebhookPayload('test-shop', chatId)
       })
 
-      expect(response.statusCode).toBe(200)
-      const body = response.json()
-      expect(body.handled).toBe(false)
-      expect(body.action).toBe('ignored_non_trigger')
+      const invalidResponse = await server.inject({
+        method: 'POST',
+        url: '/webhook',
+        payload: createWebhookPayload('invalid option', chatId)
+      })
+
+      expect(invalidResponse.statusCode).toBe(200)
+      const body = invalidResponse.json()
+      expect(body.handled).toBe(true)
     })
   })
 
@@ -125,7 +157,7 @@ describe('E2E: Webhook Flow', () => {
         payload: {
           typeWebhook: 'incomingMessageReceived',
           instanceData: { idInstance: 123, wid: 'bot@c.us' },
-          senderData: { chatId: 'user123@c.us', sender: 'user123@c.us' },
+          senderData: { chatId: 'image-user@c.us', sender: 'image-user@c.us' },
           messageData: {
             typeMessage: 'imageMessage',
             fileMessageData: { downloadUrl: 'https://example.com/image.jpg' }

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { ConfigError } from './errors.js'
 import { logger } from './logger.js'
 
-const booleanFromString = z
+const coerceBooleanFromEnvVar = z
   .union([z.boolean(), z.string()])
   .transform((val) => {
     if (typeof val === 'boolean') return val
@@ -13,8 +13,9 @@ const booleanFromString = z
 const configSchema = z.object({
   port: z.coerce.number().int().min(1).max(65535).default(3000),
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  mockMode: booleanFromString,
+  mockMode: coerceBooleanFromEnvVar,
   triggerCode: z.string().min(1).optional(),
+  sessionTimeoutMs: z.coerce.number().int().min(1000).default(300000),
   greenApi: z.object({
     instanceId: z.string({ required_error: 'GREEN_API_INSTANCE_ID is required' }).min(1, 'GREEN_API_INSTANCE_ID cannot be empty'),
     token: z.string({ required_error: 'GREEN_API_TOKEN is required' }).min(1, 'GREEN_API_TOKEN cannot be empty')
@@ -40,6 +41,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     logLevel: env.LOG_LEVEL,
     mockMode: env.MOCK_MODE,
     triggerCode: env.TRIGGER_CODE,
+    sessionTimeoutMs: env.SESSION_TIMEOUT_MS,
     greenApi: {
       instanceId: env.GREEN_API_INSTANCE_ID,
       token: env.GREEN_API_TOKEN

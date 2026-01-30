@@ -1,9 +1,13 @@
 import { vi } from 'vitest'
 import type { GreenApiSender } from '../../src/greenapi/sender.js'
 
-export function createMockSender(): GreenApiSender & { sendMessage: ReturnType<typeof vi.fn> } {
+export function createMockSender(): GreenApiSender & { 
+  sendMessage: ReturnType<typeof vi.fn>
+  sendButtons: ReturnType<typeof vi.fn>
+} {
   return {
-    sendMessage: vi.fn().mockResolvedValue({ idMessage: 'mock-msg-id' })
+    sendMessage: vi.fn().mockResolvedValue({ idMessage: 'mock-msg-id' }),
+    sendButtons: vi.fn().mockResolvedValue({ idMessage: 'mock-btn-id' })
   }
 }
 

@@ -1,6 +1,12 @@
 # Shop Update Chatbot - Development Plan
 
-## Goal (Step 1)
+## Goal (Step 2 - Current)
+Multi-turn conversation with button-based intent selection:
+1. User sends trigger code → Session created, welcome + button options sent
+2. User clicks button (List Products / Add New Product) → Action triggered
+3. Session persists for conversation flow until timeout/cancel
+
+## Goal (Step 1 - Completed)
 A working production-ready app that:
 1. Receives inbound messages from Green API webhook
 2. If message equals "test-shop" (case-insensitive, trimmed), responds with welcome message
@@ -10,7 +16,17 @@ A working production-ready app that:
 
 ## Progress
 
-### Completed
+### Completed (Step 2)
+- [x] Conversation types (Session, Step, FlowDefinition, FlowResult)
+- [x] MemoryManager interface + createInMemoryManager implementation
+- [x] Flow JSON definition (src/flows/inventory.json)
+- [x] FlowController with state machine processing
+- [x] sendButtons() method for Green API interactive buttons
+- [x] Refactored webhook handler to delegate to FlowController
+- [x] Updated app.ts wiring with all new modules
+- [x] E2E tests for multi-turn conversations
+
+### Completed (Step 1)
 - [x] Initialize project: package.json, tsconfig.json, vitest.config.ts
 - [x] Create custom error classes (ConfigError, MessagesError, GreenApiError, WebhookError)
 - [x] Create logger with pino (info, warn, error levels)
@@ -31,7 +47,8 @@ A working production-ready app that:
 (none)
 
 ### Pending
-(none)
+- [ ] Implement actual listProducts action (WooCommerce integration)
+- [ ] Implement actual addProduct action (with OpenAI parsing)
 
 ### Deployment
 - [x] GitHub Actions workflow for Railway deployment
@@ -55,33 +72,42 @@ All tasks for Step 1 are done:
 
 ```
 src/
-├── index.ts          # Entry point, loads dotenv, starts server
-├── app.ts            # Wires all dependencies, creates server
-├── config.ts         # Loads and validates env vars
-├── logger.ts         # Pino logger setup
-├── messages.ts       # Loads messages from JSON file
-├── errors.ts         # Custom error classes
-├── server.ts         # Fastify server with routes
+├── index.ts              # Entry point, loads dotenv, starts server
+├── app.ts                # Wires all dependencies, creates server
+├── config.ts             # Loads and validates env vars
+├── logger.ts             # Pino logger setup
+├── messages.ts           # Loads messages from JSON file
+├── errors.ts             # Custom error classes
+├── server.ts             # Fastify server with routes
 ├── webhook/
-│   ├── handler.ts    # Processes webhooks, trigger detection
-│   └── types.ts      # Zod schemas for webhook payloads
-└── greenapi/
-    └── sender.ts     # Sends messages via Green API
+│   ├── handler.ts        # Processes webhooks, delegates to FlowController
+│   └── types.ts          # Zod schemas for webhook payloads
+├── greenapi/
+│   └── sender.ts         # Sends messages + buttons via Green API
+├── conversation/
+│   ├── types.ts          # Session, Step, FlowDefinition types + MemoryManager interface
+│   ├── memory.ts         # createInMemoryManager implementation
+│   └── flow-controller.ts # State machine processor
+└── flows/
+    └── inventory.json    # Flow definition (trigger → intent → actions)
 
-messages/
-└── en.json           # Bot messages (editable)
-
-tests/docker/
-└── docker.test.ts    # Docker build & health integration test
+src/messages/
+└── en.json               # Bot messages (welcome, intent_prompt, etc.)
 
 tests/
-├── sender.test.ts    # Green API sender tests
-├── webhook.test.ts   # Webhook handler tests
+├── unit/
+│   ├── memory.test.ts    # MemoryManager tests
+│   ├── flow-controller.test.ts # FlowController tests
+│   ├── sender.test.ts    # Green API sender tests
+│   └── webhook.test.ts   # Webhook handler tests
+├── e2e/
+│   └── e2e.test.ts       # Full flow tests
+├── docker/
+│   └── docker.test.ts    # Docker integration tests
 └── mocks/
-    └── greenapi.ts   # Mock factories for testing
+    └── greenapi.ts       # Mock factories
 
-Dockerfile            # Production multi-stage build
-.dockerignore         # Files excluded from Docker context
+Dockerfile                # Production multi-stage build
 ```
 
 ---
@@ -90,21 +116,24 @@ Dockerfile            # Production multi-stage build
 
 All modules use dependency injection for testability:
 - `sender.ts` - accepts `fetchFn` parameter (mock fetch in tests)
-- `webhook/handler.ts` - accepts `{ sender, logger, messages, triggerCode? }` (all mockable)
+- `webhook/handler.ts` - accepts `{ flowController, sender, logger }` (all mockable)
+- `flow-controller.ts` - accepts `{ memory, flow, messages, triggerCode?, logger }` (all mockable)
+- `memory.ts` - implements `MemoryManager` interface (swappable with DB or mock)
 
-## Trigger Code
+Run tests: `npm test` (60 tests)
 
-The trigger code is configured via `TRIGGER_CODE` environment variable (optional).
-- If `TRIGGER_CODE` is set, only messages matching it (case-insensitive, trimmed) start the flow
-- If `TRIGGER_CODE` is not set, any text message starts the flow
+## Configuration
 
-Run tests: `npm test`
+| Env Variable | Description | Default |
+|--------------|-------------|---------|
+| `TRIGGER_CODE` | Message to start conversation flow | (any message) |
+| `SESSION_TIMEOUT_MS` | Session inactivity timeout | 300000 (5 min) |
+| `MOCK_MODE` | Use mock sender (no API calls) | false |
 
 ---
 
-## Next Steps After Step 1
-- Session state management (in-memory first, Redis later)
-- Intent prompt (list/add/cancel)
-- WooCommerce integration
-- Product listing with pagination
-- Product adding with OpenAI parsing
+## Next Steps
+- Implement listProducts action (WooCommerce integration)
+- Implement addProduct action (with OpenAI parsing for product details)
+- Add more conversation steps (product details input, confirmation)
+- Consider switching to actual WhatsApp buttons when Green API stabilizes
