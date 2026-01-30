@@ -29,9 +29,18 @@ When the user provides new instructions or requirements during work:
 4. **Update .env.example**: If new environment variables are added
 5. **Update DEV-LESSONS.md**: If a bug was fixed or a lesson was learned
 
+## Before Every Commit
+
+1. **Update README.md**: Ensure it reflects current features, setup instructions, and project structure
+   - Add new features to the Features section
+   - Update environment variables table if new vars added
+   - Update project structure if new directories/files added
+   - Update conversation flow examples if flow changed
+
 ## Source of Truth
 
 - `PLAN.md` - Current progress and implementation plan
+- `README.md` - User-facing documentation (features, setup, usage)
 - `basic-instructions.md` - Full project requirements and specifications
 - `messages/en.json` - All user-facing bot messages
 - `DEV-LESSONS.md` - Lessons learned from bugs and mistakes
