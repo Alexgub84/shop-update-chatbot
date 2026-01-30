@@ -1,0 +1,55 @@
+---
+description: Core development standards for the shop-update-chatbot project
+alwaysApply: true
+---
+
+# Development Standards
+
+## Planning First
+
+Before writing code, output a concise plan:
+- Identify modules/components affected
+- Nominate design patterns (Strategy, Factory, Adapter)
+- Flag potential security risks
+
+## Iterative Implementation
+
+1. **Structure First**: Show signatures/interfaces only
+2. **Wait for Approval**: Do not write implementation yet
+3. **One by One**: Implement each function individually after approval
+
+## Code Quality
+
+- No comments in code (exception: explain complex "Why" logic)
+- No lazy placeholders like `// ... rest of code`
+- Read target file's imports, types, and indentation before generating
+- Pin dependency versions exactly (no `^` or `~` ranges)
+
+## Error Handling
+
+- Every module must have custom error classes
+- Log errors with context: `{ event, error, ...context }`
+- Stop on test/build failures - analyze root cause before fixing
+
+## Testing
+
+- Each module gets unit tests covering success AND error cases
+- Tests must verify correct error type is thrown
+- Use mocks for external services (no network calls in tests)
+
+## Logging (Pino)
+
+| Level | Use |
+|-------|-----|
+| `info` | Successful operations, state transitions |
+| `warn` | Ignored inputs, recoverable issues |
+| `error` | Failures, exceptions |
+
+Never log secrets (tokens, API keys).
+
+## Finalization
+
+1. Run validation: build, lint, test
+2. Fix failures without asking
+3. Only after all checks pass, confirm with user
+4. Generate single git commit command on confirmation

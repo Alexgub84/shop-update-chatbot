@@ -1,0 +1,37 @@
+---
+description: Always follow PLAN.md and keep documentation in sync
+alwaysApply: true
+---
+
+# Plan & Documentation Management
+
+## Always Follow the Plan
+
+1. **Before starting work**: Read `PLAN.md` to understand current progress and next steps
+2. **During work**: Follow the plan's architecture and structure
+3. **After completing a step**: Update `PLAN.md` immediately
+
+## Updating PLAN.md
+
+After completing each task:
+- Move completed items from "In Progress" to "Completed" (mark with `[x]`)
+- Move next items from "Pending" to "In Progress" (mark with `[ ]`)
+- Update architecture section if implementation changed
+- Add any new tasks discovered during implementation
+
+## Handling New Instructions
+
+When the user provides new instructions or requirements during work:
+
+1. **Update PLAN.md**: Add new tasks to appropriate section (Pending/In Progress)
+2. **Update basic-instructions.md**: If it changes core requirements or specifications
+3. **Update messages/en.json**: If new bot messages are needed
+4. **Update .env.example**: If new environment variables are added
+
+## Source of Truth
+
+- `PLAN.md` - Current progress and implementation plan
+- `basic-instructions.md` - Full project requirements and specifications
+- `messages/en.json` - All user-facing bot messages
+
+Keep all documentation in sync with actual implementation.

@@ -1,0 +1,113 @@
+# Shop Update Chatbot
+
+WhatsApp chatbot for shop inventory management via Green API.
+
+## Setup
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Copy `.env.example` to `.env` and configure:
+```bash
+cp .env.example .env
+```
+
+3. Edit `.env` with your settings:
+```
+PORT=3000
+LOG_LEVEL=info
+MOCK_MODE=true          # Set to false for production
+TRIGGER_CODE=test-shop
+GREEN_API_INSTANCE_ID=your_instance_id
+GREEN_API_TOKEN=your_api_token
+```
+
+## Development
+
+Start the dev server with hot reload:
+```bash
+npm run dev
+```
+
+Run tests:
+```bash
+npm test
+```
+
+## Mock Mode
+
+When `MOCK_MODE=true`, the bot logs messages instead of sending them to Green API. Use this for local development and testing.
+
+## Endpoints
+
+- `GET /health` - Health check
+- `POST /webhook` - Green API webhook receiver
+
+## How It Works
+
+1. Green API sends incoming WhatsApp messages to `/webhook`
+2. If message equals the trigger code (default: "test-shop"), bot responds with welcome message
+3. Other messages are ignored (returns 200 OK but no response sent)
+
+## Testing the Webhook
+
+```bash
+# Trigger message (should respond)
+curl -X POST http://localhost:3000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "typeWebhook": "incomingMessageReceived",
+    "instanceData": { "idInstance": 123, "wid": "bot@c.us" },
+    "senderData": { "chatId": "user@c.us", "sender": "user@c.us" },
+    "messageData": {
+      "typeMessage": "textMessage",
+      "textMessageData": { "textMessage": "test-shop" }
+    },
+    "idMessage": "MSG001"
+  }'
+
+# Non-trigger message (should be ignored)
+curl -X POST http://localhost:3000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "typeWebhook": "incomingMessageReceived",
+    "instanceData": { "idInstance": 123, "wid": "bot@c.us" },
+    "senderData": { "chatId": "user@c.us", "sender": "user@c.us" },
+    "messageData": {
+      "typeMessage": "textMessage",
+      "textMessageData": { "textMessage": "hello" }
+    },
+    "idMessage": "MSG002"
+  }'
+```
+
+## Project Structure
+
+```
+src/
+├── index.ts          # Entry point
+├── app.ts            # Dependency wiring
+├── config.ts         # Environment config
+├── logger.ts         # Pino logger
+├── messages.ts       # Message loader
+├── errors.ts         # Custom errors
+├── server.ts         # Fastify server
+├── messages/
+│   └── en.json       # Bot messages (editable text)
+├── webhook/
+│   ├── handler.ts    # Webhook processing
+│   └── types.ts      # Payload schemas
+└── greenapi/
+    └── sender.ts     # Green API client
+
+tests/
+├── unit/
+│   ├── sender.test.ts   # Sender unit tests
+│   └── webhook.test.ts  # Handler unit tests
+├── e2e/
+│   └── e2e.test.ts      # End-to-end tests
+└── mocks/
+    └── greenapi.ts      # Test mocks
+```

@@ -1,0 +1,51 @@
+---
+description: Testing standards using Vitest
+globs: "**/*.test.ts"
+alwaysApply: false
+---
+
+# Testing Standards
+
+## Structure
+
+```typescript
+describe('ModuleName', () => {
+  describe('functionName', () => {
+    it('should succeed with valid input', () => {})
+    it('should throw SpecificError when condition', () => {})
+  })
+})
+```
+
+## Error Testing
+
+Always verify error type AND message:
+
+```typescript
+it('should throw ConfigError for missing env var', () => {
+  expect(() => loadConfig({}))
+    .toThrow(ConfigError)
+  expect(() => loadConfig({}))
+    .toThrow(/GREEN_API_TOKEN/)
+})
+```
+
+## Mocking External Services
+
+```typescript
+const mockSender = {
+  send: vi.fn().mockResolvedValue({ success: true })
+}
+
+const mockSenderError = {
+  send: vi.fn().mockRejectedValue(new Error('Network error'))
+}
+```
+
+## Test Coverage Requirements
+
+Each module must test:
+- Happy path (valid inputs)
+- Edge cases (empty strings, whitespace)
+- Error cases (invalid inputs, missing data)
+- Error type verification (correct error class thrown)

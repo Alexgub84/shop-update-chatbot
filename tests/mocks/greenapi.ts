@@ -1,0 +1,45 @@
+import { vi } from 'vitest'
+import type { GreenApiSender } from '../../src/greenapi/sender.js'
+
+export function createMockSender(): GreenApiSender & { sendMessage: ReturnType<typeof vi.fn> } {
+  return {
+    sendMessage: vi.fn().mockResolvedValue({ idMessage: 'mock-msg-id' })
+  }
+}
+
+export function createMockLogger() {
+  return {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn()
+  } as any
+}
+
+export function createValidWebhookPayload(text: string) {
+  return {
+    typeWebhook: 'incomingMessageReceived',
+    instanceData: { idInstance: 123, wid: '123456789@c.us' },
+    senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
+    messageData: {
+      typeMessage: 'textMessage',
+      textMessageData: { textMessage: text }
+    },
+    idMessage: 'ABC123'
+  }
+}
+
+export function createImageWebhookPayload() {
+  return {
+    typeWebhook: 'incomingMessageReceived',
+    instanceData: { idInstance: 123, wid: '123456789@c.us' },
+    senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
+    messageData: {
+      typeMessage: 'imageMessage',
+      fileMessageData: { downloadUrl: 'https://example.com/image.jpg' }
+    },
+    idMessage: 'ABC123'
+  }
+}

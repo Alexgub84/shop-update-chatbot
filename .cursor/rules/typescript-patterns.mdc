@@ -1,0 +1,58 @@
+---
+description: TypeScript patterns for Node.js/Fastify backend
+globs: "**/*.ts"
+alwaysApply: false
+---
+
+# TypeScript Patterns
+
+## Error Classes
+
+```typescript
+export class ConfigError extends Error {
+  name = 'ConfigError'
+  constructor(message: string, public readonly field?: string) {
+    super(message)
+  }
+}
+```
+
+## Dependency Injection
+
+Modules accept dependencies via constructor or factory function:
+
+```typescript
+export function createSender(config: Config, logger: Logger) {
+  return {
+    async send(chatId: string, message: string) { ... }
+  }
+}
+```
+
+## Validation with Zod
+
+```typescript
+const configSchema = z.object({
+  port: z.coerce.number().default(3000),
+  triggerCode: z.string().min(1),
+})
+
+export function loadConfig(env: NodeJS.ProcessEnv) {
+  const result = configSchema.safeParse(env)
+  if (!result.success) {
+    throw new ConfigError(result.error.message)
+  }
+  return result.data
+}
+```
+
+## Async Error Handling
+
+```typescript
+try {
+  await externalApi.call()
+} catch (err) {
+  logger.error({ event: 'api_call_failed', error: err })
+  throw new ApiError('External call failed', { cause: err })
+}
+```
