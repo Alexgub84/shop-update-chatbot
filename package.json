@@ -8,8 +8,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "test": "npm run lint && vitest run",
     "test:watch": "vitest",
+    "test:prod": "vitest run tests/prod/",
     "lint": "tsc --noEmit"
   },
   "engines": {
