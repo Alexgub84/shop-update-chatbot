@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { WooCommerceError, type WooCommerceErrorCode } from '../errors.js'
 import { createNoopLogger, type Logger } from '../logger.js'
 import type { WooCommerceClient } from '../woocommerce/types.js'
 import type {
@@ -40,6 +41,25 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
 
   function getMessage(key: string): string {
     return messages[key] ?? `[Missing message: ${key}]`
+  }
+
+  const errorCodeToMessageKey: Record<WooCommerceErrorCode, string> = {
+    network_error: 'error_network',
+    unauthorized: 'error_unauthorized',
+    forbidden: 'error_forbidden',
+    not_found: 'error_not_found',
+    duplicate_sku: 'error_duplicate_sku',
+    invalid_data: 'error_invalid_data',
+    server_error: 'error_server',
+    unknown: 'error_unknown'
+  }
+
+  function getErrorMessage(err: unknown): string {
+    if (err instanceof WooCommerceError) {
+      const messageKey = errorCodeToMessageKey[err.errorCode]
+      return getMessage(messageKey)
+    }
+    return getMessage('error_unknown')
   }
 
   function buildButtonsFromChoice(step: ChoiceStep): FlowButtons {
@@ -309,7 +329,7 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
       return `📦 *Products (${products.length}):*\n\n${productList}`
     } catch (err) {
       logger.error({ event: 'list_products_error', error: err })
-      return '[Error fetching products]'
+      return `${getMessage('list_products_error')}\n\n${getErrorMessage(err)}`
     }
   }
 
@@ -413,7 +433,7 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     return parts.join('\n\n')
   }
 
-  function executeAddProduct(session: Session): string {
+  async function executeAddProduct(session: Session): Promise<string> {
     const productData = session.context.productData as ProductData | undefined
 
     if (!productData || !isProductComplete(productData)) {
@@ -421,13 +441,35 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
       return '[Product data incomplete]'
     }
 
+    if (!wooCommerce) {
+      logger.warn({ event: 'woocommerce_not_configured' })
+      return '[WooCommerce not configured]'
+    }
+
     productData.sku = randomUUID()
     session.context.productData = productData
 
     logger.info({ event: 'add_product_processing', productData })
 
-    const template = getMessage('add_product_received')
-    return template.replace('{name}', productData.name!)
+    try {
+      const createdProduct = await wooCommerce.createProduct({
+        name: productData.name!,
+        regular_price: productData.price!.toString(),
+        stock_quantity: productData.stock!,
+        description: productData.description,
+        sku: productData.sku
+      })
+
+      logger.info({ event: 'add_product_success', productId: createdProduct.id, sku: createdProduct.sku })
+
+      delete session.context.productData
+
+      const template = getMessage('add_product_received')
+      return template.replace('{name}', createdProduct.name)
+    } catch (err) {
+      logger.error({ event: 'add_product_error', error: err, productData })
+      return `${getMessage('add_product_error')}\n\n${getErrorMessage(err)}`
+    }
   }
 
   async function processActionStep(
@@ -441,7 +483,7 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     if (step.action === 'listProducts') {
       actionResult = await executeListProducts()
     } else if (step.action === 'addProduct') {
-      actionResult = executeAddProduct(session)
+      actionResult = await executeAddProduct(session)
     } else {
       actionResult = `[Action: ${step.action}]`
     }

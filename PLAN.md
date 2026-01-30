@@ -50,8 +50,12 @@ A working production-ready app that:
 (none)
 
 ### Pending
-- [ ] Implement actual addProduct action (WooCommerce API call to create product)
 - [ ] Investigate better validation approach for product fields (consider Zod schemas, reusable validators, better error messages)
+
+### Completed (Step 2 - WooCommerce Product Creation)
+- [x] Implement actual addProduct action (WooCommerce API call to create product)
+- [x] Add createProduct method to WooCommerceClient interface and implementation
+- [x] Add user-friendly error messages for WooCommerce API errors (network, auth, duplicate SKU, etc.)
 
 ### Completed (Step 2 - Add Product Input Flow)
 - [x] Input step type with field collection (name, price, stock, description)

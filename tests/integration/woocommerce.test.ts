@@ -141,7 +141,12 @@ describe('Integration: WooCommerce Client', () => {
       const client = createWooCommerceClient(badConfig, mockLogger)
 
       await expect(client.getProducts()).rejects.toThrow(WooCommerceError)
-      await expect(client.getProducts()).rejects.toThrow(/WooCommerce API error: 401/)
+      
+      try {
+        await client.getProducts()
+      } catch (err) {
+        expect((err as WooCommerceError).errorCode).toBe('unauthorized')
+      }
     })
 
     it('should include status code 401 in error', async () => {
@@ -339,7 +344,12 @@ describe('Integration: WooCommerce Client', () => {
       const client = createWooCommerceClient(badConfig, mockLogger)
 
       await expect(client.getProductBySku('TEST-SKU')).rejects.toThrow(WooCommerceError)
-      await expect(client.getProductBySku('TEST-SKU')).rejects.toThrow(/WooCommerce API error: 401/)
+      
+      try {
+        await client.getProductBySku('TEST-SKU')
+      } catch (err) {
+        expect((err as WooCommerceError).errorCode).toBe('unauthorized')
+      }
     })
   })
 

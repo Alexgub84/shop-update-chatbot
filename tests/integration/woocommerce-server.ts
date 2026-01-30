@@ -60,6 +60,57 @@ export function createMockWooCommerceServer(port = 0): MockWooCommerceServer {
     return reply.status(200).send(pagedProducts)
   })
 
+  let nextProductId = 1000
+
+  server.post('/wp-json/wc/v3/products', async (request, reply) => {
+    requestLog.push({
+      method: 'POST',
+      url: request.url,
+      headers: request.headers as Record<string, string>
+    })
+
+    const authHeader = request.headers.authorization
+    if (!verifyAuth(authHeader)) {
+      return reply.status(401).send({
+        code: 'woocommerce_rest_cannot_create',
+        message: 'Sorry, you are not allowed to create resources.',
+        data: { status: 401 }
+      })
+    }
+
+    const body = request.body as Record<string, unknown>
+
+    if (body.sku) {
+      const existingProduct = products.find(p => p.sku === body.sku)
+      if (existingProduct) {
+        return reply.status(400).send({
+          code: 'product_invalid_sku',
+          message: 'Invalid or duplicated SKU.',
+          data: { status: 400, resource_id: existingProduct.id }
+        })
+      }
+    }
+
+    const newProduct: WooProduct = {
+      id: nextProductId++,
+      name: String(body.name || 'Product'),
+      slug: String(body.name || 'product').toLowerCase().replace(/\s+/g, '-'),
+      price: String(body.regular_price || ''),
+      regular_price: String(body.regular_price || ''),
+      sale_price: '',
+      stock_status: 'instock',
+      stock_quantity: Number(body.stock_quantity) || null,
+      status: 'publish',
+      description: String(body.description || ''),
+      short_description: '',
+      sku: String(body.sku || '')
+    }
+
+    products.push(newProduct)
+
+    return reply.status(201).send(newProduct)
+  })
+
   return {
     server,
     get url() {

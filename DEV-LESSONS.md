@@ -8,6 +8,22 @@ A log of mistakes, bugs, and issues we've encountered with their solutions.
 
 <!-- Add new entries at the top -->
 
+### [Test] Always Test API Error Scenarios with Real Responses
+**Date:** 2026-01-31
+**Problem:** Unit tests for API clients may miss edge cases if error response formats are assumed rather than verified against real API responses
+**Solution:** Before writing error handling tests, send intentional bad requests to the real API (wrong credentials, duplicate data, invalid params) to capture exact error response formats, then mock those exact responses in unit tests
+**Prevention:** When adding new API methods, always: (1) test with real API to get actual error formats, (2) create unit tests for ALL error codes (401, 403, 404, 400, 500+, network errors), (3) verify user-friendly messages are returned for each error type
+
+---
+
+### [Logic] Success Message Without API Call
+**Date:** 2026-01-31
+**Problem:** Bot showed "Product added successfully!" but product never appeared in WooCommerce - `executeAddProduct()` returned success message without calling WooCommerce API (createProduct method was never implemented)
+**Solution:** Implemented `createProduct()` method in WooCommerceClient and updated `executeAddProduct()` to actually call the API before showing success
+**Prevention:** Never show success messages until after the actual operation completes successfully. Use todo tracking (PLAN.md) to catch unimplemented features before production
+
+---
+
 ### [Logic] Wrap All HTTP Request Operations in Try/Catch
 **Date:** 2026-01-31
 **Problem:** HTTP requests only caught network errors (fetch failure) but not response body read errors or JSON parse errors - these could throw unlogged exceptions

@@ -11,5 +11,15 @@
   "validation_error_name": "Name must not be empty",
   "validation_error_price": "Price must be a valid number (e.g., 29.99)",
   "validation_error_stock": "Stock must be a whole number (e.g., 10)",
-  "add_product_received": "Product \"{name}\" added successfully!"
+  "add_product_received": "Product \"{name}\" added successfully!",
+  "add_product_error": "Failed to add product. Please try again later.",
+  "error_network": "Could not connect to the store. Please check your internet connection and try again.",
+  "error_unauthorized": "Store access denied. The API credentials are invalid. Please contact support.",
+  "error_forbidden": "You don't have permission to perform this action. Please check your API permissions.",
+  "error_not_found": "The store or resource was not found. Please check the store URL.",
+  "error_duplicate_sku": "A product with this SKU already exists. Please try again.",
+  "error_invalid_data": "The product data is invalid. Please check the values and try again.",
+  "error_server": "The store server is having issues. Please try again in a few minutes.",
+  "error_unknown": "Something went wrong. Please try again later.",
+  "list_products_error": "Could not fetch products from your store."
 }

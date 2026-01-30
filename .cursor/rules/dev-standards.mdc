@@ -65,6 +65,23 @@ const fakeMemory: MemoryManager = { get: vi.fn(), set: vi.fn() }
 - Tests must verify correct error type is thrown
 - Use mocks for external services (no network calls in tests)
 
+## API Integration Checklist
+
+When adding any external API call (WooCommerce, Green API, etc.):
+
+1. **Implement the actual API call** - Never show success messages without calling the API
+2. **Test with real API first** - Send test requests to get actual error response formats
+3. **Unit test ALL error scenarios**:
+   - Network error (connection refused, timeout)
+   - 401 Unauthorized (invalid credentials)
+   - 403 Forbidden (insufficient permissions)
+   - 404 Not Found (wrong URL/resource)
+   - 400 Bad Request (invalid data, duplicate entries)
+   - 500+ Server errors (service unavailable)
+   - JSON parse errors (malformed response)
+4. **Map errors to user-friendly messages** - Users should never see raw API errors
+5. **Verify success only AFTER API returns** - Never assume success before the call completes
+
 ## Logging (Pino)
 
 | Level | Use |

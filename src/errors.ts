@@ -34,12 +34,23 @@ export class WebhookError extends Error {
   }
 }
 
+export type WooCommerceErrorCode = 
+  | 'network_error'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'duplicate_sku'
+  | 'invalid_data'
+  | 'server_error'
+  | 'unknown'
+
 export class WooCommerceError extends Error {
   readonly name = 'WooCommerceError'
 
   constructor(
     message: string,
     public readonly statusCode?: number,
+    public readonly errorCode: WooCommerceErrorCode = 'unknown',
     options?: ErrorOptions
   ) {
     super(message, options)

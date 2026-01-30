@@ -19,7 +19,16 @@ export interface WooProduct {
   sku: string
 }
 
+export interface CreateProductInput {
+  name: string
+  regular_price: string
+  stock_quantity: number
+  description?: string
+  sku?: string
+}
+
 export interface WooCommerceClient {
   getProducts(perPage?: number): Promise<WooProduct[]>
   getProductBySku(sku: string): Promise<WooProduct | null>
+  createProduct(input: CreateProductInput): Promise<WooProduct>
 }

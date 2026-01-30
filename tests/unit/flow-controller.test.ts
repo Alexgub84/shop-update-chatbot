@@ -12,7 +12,22 @@ describe('FlowController', () => {
 
   function createMockWooCommerce(products: WooProduct[] = []): WooCommerceClient {
     return {
-      getProducts: vi.fn().mockResolvedValue(products)
+      getProducts: vi.fn().mockResolvedValue(products),
+      getProductBySku: vi.fn().mockResolvedValue(null),
+      createProduct: vi.fn().mockImplementation(async (input) => ({
+        id: 123,
+        name: input.name,
+        slug: input.name.toLowerCase().replace(/\s+/g, '-'),
+        price: input.regular_price,
+        regular_price: input.regular_price,
+        sale_price: '',
+        stock_status: 'instock',
+        stock_quantity: input.stock_quantity,
+        status: 'publish',
+        description: input.description || '',
+        short_description: '',
+        sku: input.sku || 'test-sku'
+      }))
     }
   }
 
@@ -344,7 +359,8 @@ describe('FlowController', () => {
         memory,
         flow: testFlow,
         messages: testMessages,
-        logger: mockLogger
+        logger: mockLogger,
+        wooCommerce: createMockWooCommerce()
       })
 
       const result = await controller.process('chat123', 'Name: Test Product\nPrice: 19.99\nStock: 5')
@@ -431,7 +447,8 @@ describe('FlowController', () => {
         memory,
         flow: testFlow,
         messages: testMessages,
-        logger: mockLogger
+        logger: mockLogger,
+        wooCommerce: createMockWooCommerce()
       })
 
       const result = await controller.process('chat123', 'Stock: 15')

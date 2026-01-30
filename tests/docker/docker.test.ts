@@ -300,15 +300,26 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
   const TRIGGER_MESSAGE = 'test-shop'
   const ADD_PRODUCT_CONTAINER = 'shop-update-chatbot-add-product-test'
   const ADD_PRODUCT_PORT = 3094
+  const ADD_PRODUCT_MOCK_PORT = 3095
 
-  beforeAll(() => {
+  let mockWooServer: MockWooCommerceServer
+
+  beforeAll(async () => {
     logStep(TEST_NAME, 'Cleanup: Removing any existing test container')
     execSilent(`docker rm -f ${ADD_PRODUCT_CONTAINER}`)
+    
+    logStep(TEST_NAME, 'Starting mock WooCommerce server on host')
+    mockWooServer = createMockWooCommerceServer(ADD_PRODUCT_MOCK_PORT)
+    mockWooServer.setAuthCredentials('ck_add_product_test', 'cs_add_product_test')
+    await mockWooServer.start()
+    logStep(TEST_NAME, `Mock WooCommerce server running on port ${ADD_PRODUCT_MOCK_PORT}`)
   }, 10000)
 
-  afterAll(() => {
+  afterAll(async () => {
     logStep(TEST_NAME, 'Cleanup: Removing test container')
     execSilent(`docker rm -f ${ADD_PRODUCT_CONTAINER}`)
+    logStep(TEST_NAME, 'Cleanup: Stopping mock WooCommerce server')
+    await mockWooServer.stop()
   }, 10000)
 
   it('builds image for Add Product test', () => {
@@ -329,9 +340,9 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
       -e "TRIGGER_CODE=${TRIGGER_MESSAGE}" \
       -e GREEN_API_INSTANCE_ID=add-product-instance \
       -e GREEN_API_TOKEN=add-product-token \
-      -e WOOCOMMERCE_STORE_URL=https://test-store.com \
-      -e WOOCOMMERCE_CONSUMER_KEY=ck_test_key \
-      -e WOOCOMMERCE_CONSUMER_SECRET=cs_test_secret \
+      -e WOOCOMMERCE_STORE_URL=http://host.docker.internal:${ADD_PRODUCT_MOCK_PORT} \
+      -e WOOCOMMERCE_CONSUMER_KEY=ck_add_product_test \
+      -e WOOCOMMERCE_CONSUMER_SECRET=cs_add_product_test \
       -e LOG_LEVEL=info \
       ${IMAGE_NAME}`)
 
