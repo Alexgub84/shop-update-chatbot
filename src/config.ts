@@ -12,7 +12,7 @@ const coerceBooleanFromEnvVar = z
 
 const configSchema = z.object({
   port: z.coerce.number().int().min(1).max(65535).default(3000),
-  logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   mockMode: coerceBooleanFromEnvVar,
   fakeGreenApiMode: coerceBooleanFromEnvVar,
   triggerCode: z.string().min(1).optional(),

@@ -80,3 +80,21 @@ export function createInteractiveButtonsResponsePayload(buttonId: string) {
     idMessage: 'ABC123'
   }
 }
+
+export function createTemplateButtonReplyPayload(buttonId: string, buttonText?: string) {
+  return {
+    typeWebhook: 'incomingMessageReceived',
+    instanceData: { idInstance: 123, wid: '123456789@c.us' },
+    senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
+    messageData: {
+      typeMessage: 'templateButtonsReplyMessage',
+      templateButtonReplyMessage: {
+        selectedId: buttonId,
+        selectedDisplayText: buttonText ?? 'Button Text',
+        selectedIndex: 0,
+        stanzaId: 'original-msg-id'
+      }
+    },
+    idMessage: 'ABC123'
+  }
+}

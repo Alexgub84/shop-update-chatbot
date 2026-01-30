@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createFlowController } from '../../src/conversation/flow-controller.js'
 import type { FlowDefinition, MemoryManager, Session } from '../../src/conversation/types.js'
+import type { WooCommerceClient, WooProduct } from '../../src/woocommerce/types.js'
 
 describe('FlowController', () => {
   const mockLogger = {
@@ -8,6 +9,12 @@ describe('FlowController', () => {
     warn: vi.fn(),
     error: vi.fn()
   } as any
+
+  function createMockWooCommerce(products: WooProduct[] = []): WooCommerceClient {
+    return {
+      getProducts: vi.fn().mockResolvedValue(products)
+    }
+  }
 
   const testFlow: FlowDefinition = {
     id: 'test',
@@ -80,7 +87,7 @@ describe('FlowController', () => {
   })
 
   describe('trigger step', () => {
-    it('should create session on trigger match and return buttons', () => {
+    it('should create session on trigger match and return buttons', async () => {
       const memory = createMockMemory()
       const controller = createFlowController({
         memory,
@@ -90,7 +97,7 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', 'start')
+      const result = await controller.process('chat123', 'start')
 
       expect(result.handled).toBe(true)
       expect(result.buttons).toBeDefined()
@@ -103,7 +110,7 @@ describe('FlowController', () => {
       expect(memory.set).toHaveBeenCalled()
     })
 
-    it('should match trigger case-insensitively', () => {
+    it('should match trigger case-insensitively', async () => {
       const memory = createMockMemory()
       const controller = createFlowController({
         memory,
@@ -113,12 +120,12 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', '  start  ')
+      const result = await controller.process('chat123', '  start  ')
 
       expect(result.handled).toBe(true)
     })
 
-    it('should not handle when trigger does not match', () => {
+    it('should not handle when trigger does not match', async () => {
       const memory = createMockMemory()
       const controller = createFlowController({
         memory,
@@ -128,13 +135,13 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', 'hello')
+      const result = await controller.process('chat123', 'hello')
 
       expect(result.handled).toBe(false)
       expect(memory.createSession).not.toHaveBeenCalled()
     })
 
-    it('should match any message when no trigger code set', () => {
+    it('should match any message when no trigger code set', async () => {
       const memory = createMockMemory()
       const controller = createFlowController({
         memory,
@@ -143,14 +150,14 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', 'anything')
+      const result = await controller.process('chat123', 'anything')
 
       expect(result.handled).toBe(true)
     })
   })
 
   describe('choice step', () => {
-    it('should transition on valid option id and return buttons after action', () => {
+    it('should show not configured when wooCommerce not provided', async () => {
       const memory = createMockMemory()
       const session = memory.createSession('chat123', 'awaiting_intent')
       memory.sessions.set('chat123', session)
@@ -162,15 +169,44 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', 'list')
+      const result = await controller.process('chat123', 'list')
 
       expect(result.handled).toBe(true)
+      expect(result.preMessage).toBe('[WooCommerce not configured]')
       expect(result.buttons).toBeDefined()
-      expect(result.buttons?.header).toBe('[Action: listProducts]')
       expect(result.buttons?.body).toBe('Choose: 1 or 2')
     })
 
-    it('should transition on valid alias', () => {
+    it('should fetch products when wooCommerce is configured', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'awaiting_intent')
+      memory.sessions.set('chat123', session)
+
+      const mockProducts: WooProduct[] = [
+        { id: 1, name: 'Product A', slug: 'a', price: '10.00', regular_price: '10.00', sale_price: '', stock_status: 'instock', stock_quantity: 5, status: 'publish', description: '', short_description: '', sku: 'A' },
+        { id: 2, name: 'Product B', slug: 'b', price: '20.00', regular_price: '20.00', sale_price: '', stock_status: 'outofstock', stock_quantity: 0, status: 'publish', description: '', short_description: '', sku: 'B' }
+      ]
+      const wooCommerce = createMockWooCommerce(mockProducts)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger,
+        wooCommerce
+      })
+
+      const result = await controller.process('chat123', 'list')
+
+      expect(result.handled).toBe(true)
+      expect(result.preMessage).toContain('Products (2)')
+      expect(result.preMessage).toContain('Product A')
+      expect(result.preMessage).toContain('Product B')
+      expect(result.buttons).toBeDefined()
+      expect(wooCommerce.getProducts).toHaveBeenCalledWith(20)
+    })
+
+    it('should transition on valid alias', async () => {
       const memory = createMockMemory()
       const session = memory.createSession('chat123', 'awaiting_intent')
       memory.sessions.set('chat123', session)
@@ -182,14 +218,32 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', '1')
+      const result = await controller.process('chat123', '1')
+
+      expect(result.handled).toBe(true)
+      expect(result.preMessage).toBe('[WooCommerce not configured]')
+      expect(result.buttons).toBeDefined()
+    })
+
+    it('should match alias case-insensitively', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'awaiting_intent')
+      memory.sessions.set('chat123', session)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger
+      })
+
+      const result = await controller.process('chat123', 'LIST')
 
       expect(result.handled).toBe(true)
       expect(result.buttons).toBeDefined()
-      expect(result.buttons?.header).toBe('[Action: listProducts]')
     })
 
-    it('should match alias case-insensitively', () => {
+    it('should return buttons with invalid message on unrecognized input', async () => {
       const memory = createMockMemory()
       const session = memory.createSession('chat123', 'awaiting_intent')
       memory.sessions.set('chat123', session)
@@ -201,25 +255,7 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', 'LIST')
-
-      expect(result.handled).toBe(true)
-      expect(result.buttons).toBeDefined()
-    })
-
-    it('should return buttons with invalid message on unrecognized input', () => {
-      const memory = createMockMemory()
-      const session = memory.createSession('chat123', 'awaiting_intent')
-      memory.sessions.set('chat123', session)
-
-      const controller = createFlowController({
-        memory,
-        flow: testFlow,
-        messages: testMessages,
-        logger: mockLogger
-      })
-
-      const result = controller.process('chat123', 'invalid')
+      const result = await controller.process('chat123', 'invalid')
 
       expect(result.handled).toBe(true)
       expect(result.buttons).toBeDefined()
@@ -227,7 +263,7 @@ describe('FlowController', () => {
       expect(result.buttons?.body).toBe('Choose: 1 or 2')
     })
 
-    it('should stay on same step after invalid input', () => {
+    it('should stay on same step after invalid input', async () => {
       const memory = createMockMemory()
       const session = memory.createSession('chat123', 'awaiting_intent')
       memory.sessions.set('chat123', session)
@@ -239,7 +275,7 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      controller.process('chat123', 'invalid')
+      await controller.process('chat123', 'invalid')
 
       const updatedSession = memory.sessions.get('chat123')
       expect(updatedSession?.currentStep).toBe('awaiting_intent')
@@ -247,7 +283,7 @@ describe('FlowController', () => {
   })
 
   describe('action step', () => {
-    it('should execute action and return to next step', () => {
+    it('should execute action and return to next step', async () => {
       const memory = createMockMemory()
       const session = memory.createSession('chat123', 'awaiting_intent')
       memory.sessions.set('chat123', session)
@@ -259,13 +295,13 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      controller.process('chat123', '1')
+      await controller.process('chat123', '1')
 
       const updatedSession = memory.sessions.get('chat123')
       expect(updatedSession?.currentStep).toBe('awaiting_intent')
     })
 
-    it('should include action header and next step buttons in response', () => {
+    it('should include action as preMessage and next step buttons in response', async () => {
       const memory = createMockMemory()
       const session = memory.createSession('chat123', 'awaiting_intent')
       memory.sessions.set('chat123', session)
@@ -277,17 +313,17 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', '2')
+      const result = await controller.process('chat123', '2')
 
+      expect(result.preMessage).toBe('[Action: addProduct]')
       expect(result.buttons).toBeDefined()
-      expect(result.buttons?.header).toBe('[Action: addProduct]')
       expect(result.buttons?.body).toBe('Choose: 1 or 2')
       expect(result.buttons?.options).toHaveLength(2)
     })
   })
 
   describe('session handling', () => {
-    it('should use existing session for returning user', () => {
+    it('should use existing session for returning user', async () => {
       const memory = createMockMemory()
       const session = memory.createSession('chat123', 'awaiting_intent')
       memory.sessions.set('chat123', session)
@@ -300,13 +336,13 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', '1')
+      const result = await controller.process('chat123', '1')
 
       expect(result.handled).toBe(true)
       expect(memory.createSession).toHaveBeenCalledTimes(1)
     })
 
-    it('should delete session on invalid step', () => {
+    it('should delete session on invalid step', async () => {
       const memory = createMockMemory()
       const session: Session = {
         chatId: 'chat123',
@@ -325,7 +361,7 @@ describe('FlowController', () => {
         logger: mockLogger
       })
 
-      const result = controller.process('chat123', 'anything')
+      const result = await controller.process('chat123', 'anything')
 
       expect(result.handled).toBe(false)
       expect(memory.delete).toHaveBeenCalledWith('chat123')

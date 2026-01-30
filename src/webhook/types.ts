@@ -16,13 +16,19 @@ export const incomingMessageSchema = z.object({
       textMessage: z.string()
     }).optional(),
     buttonsResponseMessage: z.object({
-      selectedButtonId: z.string(),
+      selectedButtonId: z.string().optional(),
       selectedButtonText: z.string().optional(),
       stanzaId: z.string().optional()
     }).optional(),
     interactiveButtonsResponse: z.object({
-      selectedButtonId: z.string(),
+      selectedButtonId: z.string().optional(),
       selectedButtonText: z.string().optional()
+    }).optional(),
+    templateButtonReplyMessage: z.object({
+      selectedId: z.string().optional(),
+      selectedDisplayText: z.string().optional(),
+      selectedIndex: z.number().optional(),
+      stanzaId: z.string().optional()
     }).optional()
   }),
   idMessage: z.string()
@@ -38,11 +44,18 @@ export function extractMessageContent(payload: IncomingMessage): string | null {
   }
 
   if (typeMessage === 'buttonsResponseMessage') {
-    return payload.messageData.buttonsResponseMessage?.selectedButtonId ?? null
+    const data = payload.messageData.buttonsResponseMessage
+    return data?.selectedButtonId ?? data?.selectedButtonText ?? null
   }
 
   if (typeMessage === 'interactiveButtonsResponse') {
-    return payload.messageData.interactiveButtonsResponse?.selectedButtonId ?? null
+    const data = payload.messageData.interactiveButtonsResponse
+    return data?.selectedButtonId ?? data?.selectedButtonText ?? null
+  }
+
+  if (typeMessage === 'templateButtonsReplyMessage') {
+    const data = payload.messageData.templateButtonReplyMessage
+    return data?.selectedId ?? data?.selectedDisplayText ?? null
   }
 
   return null

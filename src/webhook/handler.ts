@@ -1,5 +1,5 @@
 import { WebhookError } from '../errors.js'
-import type { Logger } from '../logger.js'
+import { createNoopLogger, type Logger } from '../logger.js'
 import type { GreenApiSender } from '../greenapi/sender.js'
 import type { FlowController } from '../conversation/flow-controller.js'
 import { incomingMessageSchema, extractMessageContent, type IncomingMessage } from './types.js'
@@ -7,7 +7,7 @@ import { incomingMessageSchema, extractMessageContent, type IncomingMessage } fr
 export interface WebhookHandlerDeps {
   flowController: FlowController
   sender: GreenApiSender
-  logger: Logger
+  logger?: Logger
 }
 
 export interface WebhookHandlerResult {
@@ -16,7 +16,8 @@ export interface WebhookHandlerResult {
 }
 
 export function createWebhookHandler(deps: WebhookHandlerDeps) {
-  const { flowController, sender, logger } = deps
+  const { flowController, sender } = deps
+  const logger = deps.logger ?? createNoopLogger()
 
   function parsePayload(body: unknown): IncomingMessage {
     const result = incomingMessageSchema.safeParse(body)
@@ -57,11 +58,15 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
     }
 
     const chatId = payload.senderData.chatId
-    const result = flowController.process(chatId, messageContent)
+    const result = await flowController.process(chatId, messageContent)
 
     if (!result.handled) {
       logger.info({ event: 'flow_not_handled', chatId })
       return { handled: false, action: 'flow_processed' }
+    }
+
+    if (result.preMessage) {
+      await sender.sendMessage(chatId, result.preMessage)
     }
 
     if (result.buttons) {

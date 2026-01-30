@@ -1,6 +1,24 @@
-import { pino, Logger } from 'pino'
+import { pino, Logger as PinoLogger } from 'pino'
 
-export type { Logger }
+export interface Logger {
+  info(obj: object, msg?: string): void
+  warn(obj: object, msg?: string): void
+  error(obj: object, msg?: string): void
+}
+
+export type { PinoLogger }
+
+const noopFn = () => {}
+
+const noopLogger: Logger = {
+  info: noopFn,
+  warn: noopFn,
+  error: noopFn
+}
+
+export function createNoopLogger(): Logger {
+  return noopLogger
+}
 
 export function createLogger(name: string): Logger {
   return pino({

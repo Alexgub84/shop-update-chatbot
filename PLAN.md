@@ -26,6 +26,8 @@ A working production-ready app that:
 - [x] Updated app.ts wiring with all new modules
 - [x] E2E tests for multi-turn conversations
 - [x] WooCommerceClient service with getProducts() method (injectable, tested)
+- [x] Wire WooCommerceClient.getProducts() into listProducts action
+- [x] Docker integration test for WooCommerce (mock server on host)
 
 ### Completed (Step 1)
 - [x] Initialize project: package.json, tsconfig.json, vitest.config.ts
@@ -48,7 +50,6 @@ A working production-ready app that:
 (none)
 
 ### Pending
-- [ ] Wire WooCommerceClient.getProducts() into listProducts action
 - [ ] Implement actual addProduct action (with OpenAI parsing)
 
 ### Deployment
@@ -56,8 +57,10 @@ A working production-ready app that:
 - [x] Railway configuration (railway.json)
 - [x] Dockerfile for production builds
 - [x] Docker integration tests (tests/docker/docker.test.ts)
-  - `docker-test:production-health` - Build image, run container, verify /health
+  - `docker-test:production-health` - Build image with fake env vars, verify /health
   - `docker-test:fake-greenapi-whatsapp-flow-list-click` - FAKE GreenAPI flow test with button interaction
+  - `docker-test:woocommerce-integration` - WooCommerce API integration via mock server on host
+  - `docker-test:prod-env-health` - Build image with real .env vars, verify /health (local only)
 
 ---
 

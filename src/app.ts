@@ -19,7 +19,7 @@ const __dirname = dirname(__filename)
 
 export interface AppDependencies {
   config: Config
-  logger: Logger
+  logger?: Logger
   messages: Messages
   sender: GreenApiSender
   wooCommerce: WooCommerceClient
@@ -65,7 +65,8 @@ export function createApp(): App {
     flow,
     messages,
     triggerCode: config.triggerCode,
-    logger
+    logger,
+    wooCommerce
   })
 
   const webhookHandler = createWebhookHandler({

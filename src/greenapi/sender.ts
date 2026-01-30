@@ -1,5 +1,5 @@
 import { GreenApiError } from '../errors.js'
-import type { Logger } from '../logger.js'
+import { createNoopLogger, type Logger } from '../logger.js'
 
 export interface GreenApiConfig {
   instanceId: string
@@ -30,15 +30,16 @@ export interface GreenApiSender {
 
 export function createGreenApiSender(
   config: GreenApiConfig,
-  logger: Logger,
+  logger?: Logger,
   fetchFunction: typeof fetch = fetch
 ): GreenApiSender {
+  const log = logger ?? createNoopLogger()
   const baseUrl = `https://api.green-api.com/waInstance${config.instanceId}`
 
   async function sendMessage(chatId: string, message: string): Promise<SendMessageResponse> {
     const url = `${baseUrl}/sendMessage/${config.token}`
 
-    logger.info({ event: 'greenapi_send_start', chatId })
+    log.info({ event: 'greenapi_send_start', chatId })
 
     let response: Response
     try {
@@ -48,18 +49,18 @@ export function createGreenApiSender(
         body: JSON.stringify({ chatId, message })
       })
     } catch (err) {
-      logger.error({ event: 'greenapi_network_error', chatId, error: err })
+      log.error({ event: 'greenapi_network_error', chatId, error: err })
       throw new GreenApiError('Network error sending message', undefined, { cause: err })
     }
 
     if (!response.ok) {
       const body = await response.text()
-      logger.error({ event: 'greenapi_api_error', chatId, statusCode: response.status, body })
+      log.error({ event: 'greenapi_api_error', chatId, statusCode: response.status, body })
       throw new GreenApiError(`Green API error: ${response.status}`, response.status)
     }
 
     const data = await response.json() as SendMessageResponse
-    logger.info({ event: 'greenapi_send_success', chatId, idMessage: data.idMessage })
+    log.info({ event: 'greenapi_send_success', chatId, idMessage: data.idMessage })
 
     return data
   }
@@ -67,7 +68,7 @@ export function createGreenApiSender(
   async function sendButtons(params: SendButtonsParams): Promise<SendMessageResponse> {
     const url = `${baseUrl}/sendInteractiveButtonsReply/${config.token}`
 
-    logger.info({ event: 'greenapi_send_buttons_start', chatId: params.chatId, buttonCount: params.buttons.length })
+    log.info({ event: 'greenapi_send_buttons_start', chatId: params.chatId, buttonCount: params.buttons.length })
 
     const payload: Record<string, unknown> = {
       chatId: params.chatId,
@@ -85,18 +86,18 @@ export function createGreenApiSender(
         body: JSON.stringify(payload)
       })
     } catch (err) {
-      logger.error({ event: 'greenapi_network_error', chatId: params.chatId, error: err })
+      log.error({ event: 'greenapi_network_error', chatId: params.chatId, error: err })
       throw new GreenApiError('Network error sending buttons', undefined, { cause: err })
     }
 
     if (!response.ok) {
       const body = await response.text()
-      logger.error({ event: 'greenapi_api_error', chatId: params.chatId, statusCode: response.status, body })
+      log.error({ event: 'greenapi_api_error', chatId: params.chatId, statusCode: response.status, body })
       throw new GreenApiError(`Green API error: ${response.status}`, response.status)
     }
 
     const data = await response.json() as SendMessageResponse
-    logger.info({ event: 'greenapi_send_buttons_success', chatId: params.chatId, idMessage: data.idMessage })
+    log.info({ event: 'greenapi_send_buttons_success', chatId: params.chatId, idMessage: data.idMessage })
 
     return data
   }
@@ -104,14 +105,15 @@ export function createGreenApiSender(
   return { sendMessage, sendButtons }
 }
 
-export function createMockSender(logger: Logger): GreenApiSender {
+export function createMockSender(logger?: Logger): GreenApiSender {
+  const log = logger ?? createNoopLogger()
   let messageCounter = 0
 
   async function sendMessage(chatId: string, message: string): Promise<SendMessageResponse> {
     messageCounter++
     const idMessage = `mock-msg-${messageCounter}`
 
-    logger.info({
+    log.info({
       event: 'mock_send',
       chatId,
       message,
@@ -125,7 +127,7 @@ export function createMockSender(logger: Logger): GreenApiSender {
     messageCounter++
     const idMessage = `mock-buttons-${messageCounter}`
 
-    logger.info({
+    log.info({
       event: 'mock_send_buttons',
       chatId: params.chatId,
       body: params.body,
@@ -139,14 +141,15 @@ export function createMockSender(logger: Logger): GreenApiSender {
   return { sendMessage, sendButtons }
 }
 
-export function createFakeGreenApiSender(logger: Logger): GreenApiSender {
+export function createFakeGreenApiSender(logger?: Logger): GreenApiSender {
+  const log = logger ?? createNoopLogger()
   let messageCounter = 0
 
   async function sendMessage(chatId: string, message: string): Promise<SendMessageResponse> {
     messageCounter++
     const idMessage = `fake-greenapi-msg-${messageCounter}`
 
-    logger.info({
+    log.info({
       event: 'FAKE_GREENAPI_SEND_MESSAGE',
       mode: 'FAKE GreenAPI',
       chatId,
@@ -161,7 +164,7 @@ export function createFakeGreenApiSender(logger: Logger): GreenApiSender {
     messageCounter++
     const idMessage = `fake-greenapi-buttons-${messageCounter}`
 
-    logger.info({
+    log.info({
       event: 'FAKE_GREENAPI_SEND_BUTTONS',
       mode: 'FAKE GreenAPI',
       chatId: params.chatId,

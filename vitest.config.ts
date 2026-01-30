@@ -8,6 +8,9 @@ export default defineConfig({
     // Exclude tests that require external dependencies (Docker daemon, real APIs)
     // Use npm run test:docker or npm run test:prod to run them locally
     exclude: ['tests/prod/**', 'tests/docker/**'],
+    env: {
+      LOG_LEVEL: 'silent'
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

@@ -9,7 +9,8 @@ import {
   createValidWebhookPayload,
   createImageWebhookPayload,
   createButtonsResponsePayload,
-  createInteractiveButtonsResponsePayload
+  createInteractiveButtonsResponsePayload,
+  createTemplateButtonReplyPayload
 } from '../mocks/greenapi.js'
 
 describe('WebhookHandler', () => {
@@ -193,6 +194,53 @@ describe('WebhookHandler', () => {
         expect(mockSender.sendMessage).toHaveBeenCalledWith(
           '987654321@c.us',
           'You selected add'
+        )
+      })
+
+      it('should process templateButtonsReplyMessage and extract selectedId', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'You selected list' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler()
+        const payload = createTemplateButtonReplyPayload('list', 'List Products')
+
+        const result = await handler.handle(payload)
+
+        expect(result.handled).toBe(true)
+        expect(mockFlowController.process).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'list'
+        )
+        expect(mockSender.sendMessage).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'You selected list'
+        )
+      })
+
+      it('should fall back to button text when button ID is missing', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'You selected list' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler()
+        const payload = {
+          typeWebhook: 'incomingMessageReceived',
+          instanceData: { idInstance: 123, wid: '123456789@c.us' },
+          senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
+          messageData: {
+            typeMessage: 'templateButtonsReplyMessage',
+            templateButtonReplyMessage: {
+              selectedDisplayText: 'List Products'
+            }
+          },
+          idMessage: 'ABC123'
+        }
+
+        const result = await handler.handle(payload)
+
+        expect(result.handled).toBe(true)
+        expect(mockFlowController.process).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'List Products'
         )
       })
     })

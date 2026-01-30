@@ -1,11 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { createMockWooCommerceServer, createSampleProduct, type MockWooCommerceServer } from '../integration/woocommerce-server.js'
 
 const IMAGE_NAME = 'shop-update-chatbot-test'
+const PROD_ENV_CONTAINER = 'shop-update-chatbot-prod-env-test'
+const PROD_ENV_PORT = 3095
 const PRODUCTION_CONTAINER = 'shop-update-chatbot-production-test'
 const FAKE_GREENAPI_CONTAINER = 'shop-update-chatbot-fake-greenapi-test'
+const WOOCOMMERCE_CONTAINER = 'shop-update-chatbot-woocommerce-test'
 const PRODUCTION_PORT = 3098
 const FAKE_GREENAPI_PORT = 3099
+const WOOCOMMERCE_APP_PORT = 3097
+const WOOCOMMERCE_MOCK_PORT = 3096
 
 function exec(command: string): string {
   return execSync(command, { encoding: 'utf-8', stdio: 'pipe' })
@@ -285,4 +292,215 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - List Click (docker-test:fake-gre
     logStep(TEST_NAME, 'FAKE GreenAPI: Verified interactiveButtonsResponse was handled correctly')
     logStep(TEST_NAME, 'FAKE GreenAPI: WhatsApp flow test completed successfully!')
   }, 15000)
+})
+
+describe('Docker: WooCommerce Integration - List Products (docker-test:woocommerce-integration)', () => {
+  const TEST_NAME = 'WOOCOMMERCE-INTEGRATION'
+  const CHAT_ID = 'woocommerce-test-user@c.us'
+  const TRIGGER_MESSAGE = 'test-shop'
+  let mockWooServer: MockWooCommerceServer
+
+  beforeAll(async () => {
+    logStep(TEST_NAME, 'Cleanup: Removing any existing test container')
+    execSilent(`docker rm -f ${WOOCOMMERCE_CONTAINER}`)
+
+    logStep(TEST_NAME, 'Starting mock WooCommerce server on host')
+    mockWooServer = createMockWooCommerceServer(WOOCOMMERCE_MOCK_PORT)
+    await mockWooServer.start()
+    mockWooServer.setAuthCredentials('ck_docker_test', 'cs_docker_test')
+    mockWooServer.setProducts([
+      createSampleProduct({ id: 1, name: 'Docker Test Product 1', price: '19.99', stock_status: 'instock', sku: 'DTP-001' }),
+      createSampleProduct({ id: 2, name: 'Docker Test Product 2', price: '29.99', stock_status: 'outofstock', sku: 'DTP-002' }),
+      createSampleProduct({ id: 3, name: 'Docker Test Product 3', price: '39.99', stock_status: 'instock', sku: 'DTP-003' })
+    ])
+    logStep(TEST_NAME, `Mock WooCommerce server started on port ${mockWooServer.port}`)
+  }, 30000)
+
+  afterAll(async () => {
+    logStep(TEST_NAME, 'Cleanup: Removing test container')
+    execSilent(`docker rm -f ${WOOCOMMERCE_CONTAINER}`)
+    logStep(TEST_NAME, 'Cleanup: Stopping mock WooCommerce server')
+    await mockWooServer.stop()
+  }, 10000)
+
+  it('builds image for WooCommerce integration test', () => {
+    logStep(TEST_NAME, 'Building Docker image')
+    expect(() => {
+      execSync(`docker build -t ${IMAGE_NAME} .`, { stdio: 'inherit' })
+    }).not.toThrow()
+    logStep(TEST_NAME, 'Docker image built successfully')
+  }, 120000)
+
+  it('starts container with WooCommerce pointing to host mock server', async () => {
+    logStep(TEST_NAME, 'Starting container with WooCommerce URL pointing to host.docker.internal')
+    exec(`docker run -d \
+      --name ${WOOCOMMERCE_CONTAINER} \
+      -p ${WOOCOMMERCE_APP_PORT}:${WOOCOMMERCE_APP_PORT} \
+      -e PORT=${WOOCOMMERCE_APP_PORT} \
+      -e FAKE_GREENAPI_MODE=true \
+      -e "TRIGGER_CODE=${TRIGGER_MESSAGE}" \
+      -e GREEN_API_INSTANCE_ID=woo-test-instance \
+      -e GREEN_API_TOKEN=woo-test-token \
+      -e WOOCOMMERCE_STORE_URL=http://host.docker.internal:${WOOCOMMERCE_MOCK_PORT} \
+      -e WOOCOMMERCE_CONSUMER_KEY=ck_docker_test \
+      -e WOOCOMMERCE_CONSUMER_SECRET=cs_docker_test \
+      -e LOG_LEVEL=info \
+      ${IMAGE_NAME}`)
+
+    logStep(TEST_NAME, 'Waiting for container to become healthy')
+    const healthy = await waitForHealthy(`http://localhost:${WOOCOMMERCE_APP_PORT}/health`, 15000)
+    
+    if (!healthy) {
+      const logs = exec(`docker logs ${WOOCOMMERCE_CONTAINER}`)
+      console.error('Container logs:', logs)
+    }
+    
+    logStep(TEST_NAME, healthy ? 'Container is healthy' : 'Container health check FAILED')
+    expect(healthy).toBe(true)
+  }, 30000)
+
+  it('Step 1: Send trigger message - receives interactive buttons', async () => {
+    logStep(TEST_NAME, `Sending trigger message "${TRIGGER_MESSAGE}"`)
+    
+    const response = await fetch(`http://localhost:${WOOCOMMERCE_APP_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload(TRIGGER_MESSAGE, CHAT_ID))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.handled).toBe(true)
+    logStep(TEST_NAME, 'Trigger message processed successfully')
+
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    logStep(TEST_NAME, 'Checking container logs for button response')
+    const logs = exec(`docker logs ${WOOCOMMERCE_CONTAINER}`)
+    
+    expect(logs).toContain('FAKE_GREENAPI_SEND_BUTTONS')
+    expect(logs).toContain('List Products')
+    logStep(TEST_NAME, 'Verified interactive buttons were sent')
+  }, 10000)
+
+  it('Step 2: Click "List" - fetches products from mock WooCommerce server', async () => {
+    logStep(TEST_NAME, 'Sending "list" to trigger listProducts action')
+    
+    const response = await fetch(`http://localhost:${WOOCOMMERCE_APP_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('list', CHAT_ID))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.handled).toBe(true)
+    logStep(TEST_NAME, '"List" command processed successfully')
+
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    logStep(TEST_NAME, 'Checking container logs for WooCommerce product fetch')
+    const logs = exec(`docker logs ${WOOCOMMERCE_CONTAINER}`)
+    
+    expect(logs).toContain('action_triggered')
+    expect(logs).toContain('listProducts')
+    expect(logs).toContain('woocommerce_get_products_start')
+    expect(logs).toContain('woocommerce_get_products_success')
+    expect(logs).toContain('list_products_fetched')
+    expect(logs).toContain('"count":3')
+    logStep(TEST_NAME, 'Verified WooCommerce products were fetched (3 products)')
+
+    logStep(TEST_NAME, 'Checking mock server received the request')
+    const requestLog = mockWooServer.getRequestLog()
+    expect(requestLog.length).toBeGreaterThan(0)
+    const productRequest = requestLog.find(r => r.url.includes('/wp-json/wc/v3/products'))
+    expect(productRequest).toBeDefined()
+    expect(productRequest?.headers.authorization).toContain('Basic')
+    logStep(TEST_NAME, 'Verified mock server received authenticated product request')
+
+    logStep(TEST_NAME, 'Checking response contains product names')
+    expect(logs).toContain('Docker Test Product 1')
+    expect(logs).toContain('Docker Test Product 2')
+    expect(logs).toContain('Docker Test Product 3')
+    logStep(TEST_NAME, 'WooCommerce integration test completed successfully!')
+  }, 15000)
+})
+
+describe('Docker: Production Env Health (docker-test:prod-env-health)', () => {
+  const TEST_NAME = 'PROD-ENV-HEALTH'
+  const ENV_FILE_PATH = '.env'
+
+  beforeAll(() => {
+    logStep(TEST_NAME, 'Cleanup: Removing any existing test container')
+    execSilent(`docker rm -f ${PROD_ENV_CONTAINER}`)
+
+    if (!existsSync(ENV_FILE_PATH)) {
+      throw new Error('.env file not found - this test requires real environment variables')
+    }
+    logStep(TEST_NAME, 'Verified .env file exists')
+  }, 10000)
+
+  afterAll(() => {
+    logStep(TEST_NAME, 'Cleanup: Removing test container')
+    execSilent(`docker rm -f ${PROD_ENV_CONTAINER}`)
+  }, 10000)
+
+  it('builds production image with real env vars', () => {
+    logStep(TEST_NAME, 'Building Docker production image')
+    expect(() => {
+      execSync(`docker build -t ${IMAGE_NAME} .`, { stdio: 'inherit' })
+    }).not.toThrow()
+    logStep(TEST_NAME, 'Docker image built successfully')
+  }, 120000)
+
+  it('starts container with real .env and health check passes', async () => {
+    logStep(TEST_NAME, 'Starting container with real .env file (MOCK_MODE=true for safety)')
+    exec(`docker run -d \
+      --name ${PROD_ENV_CONTAINER} \
+      --env-file ${ENV_FILE_PATH} \
+      -p ${PROD_ENV_PORT}:${PROD_ENV_PORT} \
+      -e PORT=${PROD_ENV_PORT} \
+      -e MOCK_MODE=true \
+      ${IMAGE_NAME}`)
+
+    logStep(TEST_NAME, 'Waiting for container to become healthy')
+    const healthy = await waitForHealthy(`http://localhost:${PROD_ENV_PORT}/health`, 15000)
+    
+    if (!healthy) {
+      const logs = exec(`docker logs ${PROD_ENV_CONTAINER}`)
+      console.error('Container logs:', logs)
+    }
+    
+    logStep(TEST_NAME, healthy ? 'Container is healthy with real env vars' : 'Container health check FAILED')
+    expect(healthy).toBe(true)
+  }, 30000)
+
+  it('health endpoint returns correct response', async () => {
+    logStep(TEST_NAME, 'Testing /health endpoint response')
+    const response = await fetch(`http://localhost:${PROD_ENV_PORT}/health`)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toHaveProperty('status', 'ok')
+    expect(body).toHaveProperty('timestamp')
+    logStep(TEST_NAME, 'Health endpoint returned status: ok')
+  }, 5000)
+
+  it('webhook endpoint accepts trigger message', async () => {
+    logStep(TEST_NAME, 'Testing /webhook endpoint with trigger message')
+    const response = await fetch(`http://localhost:${PROD_ENV_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('test-shop', 'prod-env-test@c.us'))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toHaveProperty('ok', true)
+    expect(body).toHaveProperty('handled', true)
+    logStep(TEST_NAME, 'Webhook accepted trigger and responded correctly (MOCK_MODE - no actual API call)')
+    logStep(TEST_NAME, 'Production env health test completed successfully!')
+  }, 5000)
 })

@@ -1,4 +1,5 @@
-import type { Logger } from '../logger.js'
+import { createNoopLogger, type Logger } from '../logger.js'
+import type { WooCommerceClient } from '../woocommerce/types.js'
 import type {
   FlowDefinition,
   FlowResult,
@@ -16,15 +17,17 @@ export interface FlowControllerDeps {
   flow: FlowDefinition
   messages: Record<string, string>
   triggerCode?: string
-  logger: Logger
+  logger?: Logger
+  wooCommerce?: WooCommerceClient
 }
 
 export interface FlowController {
-  process(chatId: string, messageText: string): FlowResult
+  process(chatId: string, messageText: string): Promise<FlowResult>
 }
 
 export function createFlowController(dependencies: FlowControllerDeps): FlowController {
-  const { memory, flow, messages, triggerCode, logger } = dependencies
+  const { memory, flow, messages, triggerCode, wooCommerce } = dependencies
+  const logger = dependencies.logger ?? createNoopLogger()
 
   function isTriggerMatch(text: string): boolean {
     if (!triggerCode) {
@@ -109,12 +112,12 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     }
   }
 
-  function processChoiceStep(
+  async function processChoiceStep(
     chatId: string,
     messageText: string,
     session: Session,
     step: ChoiceStep
-  ): FlowResult {
+  ): Promise<FlowResult> {
     const matchedOption = matchChoiceOption(step, messageText)
 
     if (!matchedOption) {
@@ -155,7 +158,7 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     const nextStep = flow.steps[transition.nextStep]
 
     if (nextStep && nextStep.type === 'action') {
-      return processActionStep(chatId, session, nextStep as ActionStep)
+      return await processActionStep(chatId, session, nextStep as ActionStep)
     }
 
     if (isChoiceStep(nextStep)) {
@@ -183,12 +186,44 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     }
   }
 
-  function processActionStep(
+  async function executeListProducts(): Promise<string> {
+    if (!wooCommerce) {
+      logger.warn({ event: 'woocommerce_not_configured' })
+      return '[WooCommerce not configured]'
+    }
+
+    try {
+      const products = await wooCommerce.getProducts(20)
+      logger.info({ event: 'list_products_fetched', count: products.length })
+
+      if (products.length === 0) {
+        return 'No products found in your store.'
+      }
+
+      const productList = products.map((p, i) => 
+        `${i + 1}. ${p.name} - ${p.price} (${p.stock_status})`
+      ).join('\n')
+
+      return `📦 *Products (${products.length}):*\n\n${productList}`
+    } catch (err) {
+      logger.error({ event: 'list_products_error', error: err })
+      return '[Error fetching products]'
+    }
+  }
+
+  async function processActionStep(
     chatId: string,
     session: Session,
     step: ActionStep
-  ): FlowResult {
+  ): Promise<FlowResult> {
     logger.info({ event: 'action_triggered', chatId, action: step.action })
+
+    let actionResult: string
+    if (step.action === 'listProducts') {
+      actionResult = await executeListProducts()
+    } else {
+      actionResult = `[Action: ${step.action}]`
+    }
 
     session.currentStep = step.nextStep
     memory.set(chatId, session)
@@ -197,9 +232,9 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
 
     if (isChoiceStep(nextStep)) {
       const buttons = buildButtonsFromChoice(nextStep)
-      buttons.header = `[Action: ${step.action}]`
       return {
         handled: true,
+        preMessage: actionResult,
         buttons
       }
     }
@@ -207,17 +242,17 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     if (nextStep && 'messageKey' in nextStep && nextStep.messageKey) {
       return {
         handled: true,
-        response: `[Action: ${step.action}]\n\n${getMessage(nextStep.messageKey)}`
+        response: `${actionResult}\n\n${getMessage(nextStep.messageKey)}`
       }
     }
 
     return {
       handled: true,
-      response: `[Action: ${step.action}]`
+      response: actionResult
     }
   }
 
-  function process(chatId: string, messageText: string): FlowResult {
+  async function process(chatId: string, messageText: string): Promise<FlowResult> {
     let session = memory.get(chatId)
 
     if (!session) {
@@ -241,10 +276,10 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
         return processTriggerStep(chatId, messageText, currentStep as TriggerStep)
 
       case 'choice':
-        return processChoiceStep(chatId, messageText, session, currentStep as ChoiceStep)
+        return await processChoiceStep(chatId, messageText, session, currentStep as ChoiceStep)
 
       case 'action':
-        return processActionStep(chatId, session, currentStep as ActionStep)
+        return await processActionStep(chatId, session, currentStep as ActionStep)
 
       default:
         logger.warn({ event: 'unhandled_step_type', chatId, type: currentStep.type })

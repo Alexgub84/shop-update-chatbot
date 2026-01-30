@@ -8,6 +8,22 @@ A log of mistakes, bugs, and issues we've encountered with their solutions.
 
 <!-- Add new entries at the top -->
 
+### [Logic] Interactive Buttons Use Different TypeMessage in Production
+**Date:** 2026-01-31
+**Problem:** Button clicks in production returned menu buttons instead of product list - webhook handler checked for `interactiveButtonsResponse` but Green-API sends `templateButtonsReplyMessage` when user clicks interactive buttons sent via `sendInteractiveButtonsReply`
+**Solution:** Added handling for `templateButtonsReplyMessage` type with `selectedId` field in `extractMessageContent()` function
+**Prevention:** Always verify actual webhook payload formats from API documentation. Test with real production payloads, not just what you assume the format is
+
+---
+
+### [Config] Husky Prepare Script Breaks Docker Builds
+**Date:** 2026-01-31
+**Problem:** Docker build failed with `husky: not found` during `npm ci --omit=dev` because `prepare` script runs husky which is a dev dependency
+**Solution:** Changed prepare script from `"husky"` to `"husky || true"` to fail gracefully when husky isn't installed
+**Prevention:** When adding dev tools with prepare/postinstall hooks, ensure they fail gracefully in CI/production environments where dev deps aren't installed
+
+---
+
 ### [Test] Simulate Real Payloads, Not Shortcuts
 **Date:** 2026-01-30
 **Problem:** Docker test simulated button click by sending text `"list"` instead of actual `interactiveButtonsResponse` payload - test passed but production failed

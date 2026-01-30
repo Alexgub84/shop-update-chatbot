@@ -28,9 +28,9 @@ async function main() {
 
   try {
     await server.listen({ port: config.port, host: '0.0.0.0' })
-    dependencies.logger.info({ event: 'server_started', port: config.port })
+    logger.info({ event: 'server_started', port: config.port })
   } catch (err) {
-    dependencies.logger.error({ event: 'server_start_failed', error: err })
+    logger.error({ event: 'server_start_failed', error: err })
     process.exit(1)
   }
 }

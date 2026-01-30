@@ -80,6 +80,7 @@ export interface FlowButtons {
 export interface FlowResult {
   handled: boolean
   response?: string
+  preMessage?: string
   buttons?: FlowButtons
   sessionEnded?: boolean
 }
