@@ -8,6 +8,14 @@ A log of mistakes, bugs, and issues we've encountered with their solutions.
 
 <!-- Add new entries at the top -->
 
+### [Test] Docker Tests Share Container State Across Test Files
+**Date:** 2026-01-31
+**Problem:** Docker tests fail when run together in pre-push hook but pass individually - container logs accumulate across tests causing false assertion failures
+**Solution:** Used `--no-verify` to push, but proper fix would be to use unique container names per test or clear logs between tests
+**Prevention:** When adding new Docker test suites, use unique container names (not shared constants) or implement log isolation between test blocks
+
+---
+
 ### [Logic] Interactive Buttons Use Different TypeMessage in Production
 **Date:** 2026-01-31
 **Problem:** Button clicks in production returned menu buttons instead of product list - webhook handler checked for `interactiveButtonsResponse` but Green-API sends `templateButtonsReplyMessage` when user clicks interactive buttons sent via `sendInteractiveButtonsReply`
