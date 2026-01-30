@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto'
 import { createNoopLogger, type Logger } from '../logger.js'
 import type { WooCommerceClient } from '../woocommerce/types.js'
 import type {
@@ -9,6 +10,7 @@ import type {
   ChoiceStep,
   TriggerStep,
   ActionStep,
+  InputStep,
   Step
 } from './types.js'
 
@@ -161,6 +163,18 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
       return await processActionStep(chatId, session, nextStep as ActionStep)
     }
 
+    if (isInputStep(nextStep)) {
+      const responseMessages: string[] = []
+      if (transition.messageKey) {
+        responseMessages.push(getMessage(transition.messageKey))
+      }
+      responseMessages.push(getMessage(nextStep.messageKey))
+      return {
+        handled: true,
+        response: responseMessages.join('\n\n')
+      }
+    }
+
     if (isChoiceStep(nextStep)) {
       const buttons = buildButtonsFromChoice(nextStep)
       if (transition.messageKey) {
@@ -184,6 +198,94 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
       handled: true,
       response: responseMessages.length > 0 ? responseMessages.join('\n\n') : undefined
     }
+  }
+
+  function isInputStep(step: Step | undefined): step is InputStep {
+    return step?.type === 'input'
+  }
+
+  async function processInputStep(
+    chatId: string,
+    messageText: string,
+    session: Session,
+    step: InputStep
+  ): Promise<FlowResult> {
+    logger.info({ event: 'input_received', chatId, contextKey: step.contextKey })
+
+    if (messageText.trim().toLowerCase() === 'stop') {
+      logger.info({ event: 'input_cancelled', chatId, contextKey: step.contextKey })
+      delete session.context.productData
+      delete session.context[step.contextKey]
+      session.currentStep = 'awaiting_intent'
+      memory.set(chatId, session)
+
+      const intentStep = flow.steps['awaiting_intent']
+      if (isChoiceStep(intentStep)) {
+        const buttons = buildButtonsFromChoice(intentStep)
+        buttons.header = getMessage('add_product_cancelled')
+        return {
+          handled: true,
+          buttons
+        }
+      }
+
+      return {
+        handled: true,
+        response: getMessage('add_product_cancelled')
+      }
+    }
+
+    if (step.contextKey === 'productInput') {
+      const existingData = (session.context.productData as ProductData) || {}
+      const newFields = parseInputFields(messageText)
+      const { product, errors } = validateAndMergeProduct(existingData, newFields)
+
+      session.context.productData = product
+      logger.info({ event: 'product_data_updated', chatId, product, errors })
+
+      if (!isProductComplete(product) || errors.length > 0) {
+        memory.set(chatId, session)
+        const prompt = buildMissingFieldsPrompt(product, errors)
+        return {
+          handled: true,
+          response: prompt
+        }
+      }
+
+      session.currentStep = step.nextStep
+      memory.set(chatId, session)
+
+      const nextStep = flow.steps[step.nextStep]
+      if (nextStep && nextStep.type === 'action') {
+        return await processActionStep(chatId, session, nextStep as ActionStep)
+      }
+    }
+
+    session.context[step.contextKey] = messageText
+    session.currentStep = step.nextStep
+    memory.set(chatId, session)
+
+    const nextStep = flow.steps[step.nextStep]
+
+    if (nextStep && nextStep.type === 'action') {
+      return await processActionStep(chatId, session, nextStep as ActionStep)
+    }
+
+    if (isChoiceStep(nextStep)) {
+      return {
+        handled: true,
+        buttons: buildButtonsFromChoice(nextStep)
+      }
+    }
+
+    if (isInputStep(nextStep)) {
+      return {
+        handled: true,
+        response: getMessage(nextStep.messageKey)
+      }
+    }
+
+    return { handled: true }
   }
 
   async function executeListProducts(): Promise<string> {
@@ -211,6 +313,123 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     }
   }
 
+  interface ProductData {
+    name?: string
+    price?: number
+    stock?: number
+    description?: string
+    sku?: string
+  }
+
+  function parseInputFields(input: string): Record<string, string> {
+    const lines = input.split('\n')
+    const fields: Record<string, string> = {}
+
+    for (const line of lines) {
+      const colonIndex = line.indexOf(':')
+      if (colonIndex === -1) continue
+
+      const key = line.substring(0, colonIndex).trim().toLowerCase()
+      const value = line.substring(colonIndex + 1).trim()
+
+      if (value) {
+        fields[key] = value
+      }
+    }
+
+    return fields
+  }
+
+  function validateAndMergeProduct(
+    existingData: ProductData,
+    newFields: Record<string, string>
+  ): { product: ProductData; errors: string[] } {
+    const product: ProductData = { ...existingData }
+    const errors: string[] = []
+
+    if (newFields.name !== undefined) {
+      if (newFields.name.length > 0) {
+        product.name = newFields.name
+      } else {
+        errors.push(getMessage('validation_error_name'))
+      }
+    }
+
+    if (newFields.price !== undefined) {
+      const priceNum = parseFloat(newFields.price)
+      if (!isNaN(priceNum) && priceNum > 0) {
+        product.price = priceNum
+      } else {
+        errors.push(getMessage('validation_error_price'))
+      }
+    }
+
+    if (newFields.stock !== undefined) {
+      const stockNum = parseInt(newFields.stock, 10)
+      if (!isNaN(stockNum) && stockNum >= 0 && Number.isInteger(stockNum)) {
+        product.stock = stockNum
+      } else {
+        errors.push(getMessage('validation_error_stock'))
+      }
+    }
+
+    if (newFields.description !== undefined) {
+      product.description = newFields.description
+    }
+
+    return { product, errors }
+  }
+
+  function isProductComplete(product: ProductData): boolean {
+    return product.name !== undefined && product.price !== undefined && product.stock !== undefined
+  }
+
+  function buildMissingFieldsPrompt(product: ProductData, errors: string[]): string {
+    const parts: string[] = []
+
+    if (errors.length > 0) {
+      parts.push('⚠️ ' + errors.join('\n⚠️ '))
+    }
+
+    const currentValues: string[] = []
+    if (product.name) currentValues.push(`✓ Name: ${product.name}`)
+    if (product.price !== undefined) currentValues.push(`✓ Price: ${product.price}`)
+    if (product.stock !== undefined) currentValues.push(`✓ Stock: ${product.stock}`)
+    if (product.description) currentValues.push(`✓ Description: ${product.description}`)
+
+    if (currentValues.length > 0) {
+      parts.push(getMessage('add_product_current_values').replace('{current_values}', currentValues.join('\n')))
+    }
+
+    const missingFields: string[] = []
+    if (!product.name) missingFields.push('Name: Product Name')
+    if (product.price === undefined) missingFields.push('Price: 29.99')
+    if (product.stock === undefined) missingFields.push('Stock: 10')
+
+    if (missingFields.length > 0) {
+      parts.push(getMessage('add_product_missing_fields').replace('{missing_fields}', missingFields.join('\n')))
+    }
+
+    return parts.join('\n\n')
+  }
+
+  function executeAddProduct(session: Session): string {
+    const productData = session.context.productData as ProductData | undefined
+
+    if (!productData || !isProductComplete(productData)) {
+      logger.warn({ event: 'add_product_incomplete', productData })
+      return '[Product data incomplete]'
+    }
+
+    productData.sku = randomUUID()
+    session.context.productData = productData
+
+    logger.info({ event: 'add_product_processing', productData })
+
+    const template = getMessage('add_product_received')
+    return template.replace('{name}', productData.name!)
+  }
+
   async function processActionStep(
     chatId: string,
     session: Session,
@@ -221,6 +440,8 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     let actionResult: string
     if (step.action === 'listProducts') {
       actionResult = await executeListProducts()
+    } else if (step.action === 'addProduct') {
+      actionResult = executeAddProduct(session)
     } else {
       actionResult = `[Action: ${step.action}]`
     }
@@ -277,6 +498,9 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
 
       case 'choice':
         return await processChoiceStep(chatId, messageText, session, currentStep as ChoiceStep)
+
+      case 'input':
+        return await processInputStep(chatId, messageText, session, currentStep as InputStep)
 
       case 'action':
         return await processActionStep(chatId, session, currentStep as ActionStep)

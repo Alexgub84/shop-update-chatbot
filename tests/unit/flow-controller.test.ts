@@ -46,6 +46,12 @@ describe('FlowController', () => {
         nextStep: 'awaiting_intent'
       },
       add_product: {
+        type: 'input',
+        messageKey: 'add_product_prompt',
+        contextKey: 'productInput',
+        nextStep: 'process_add_product'
+      },
+      process_add_product: {
         type: 'action',
         action: 'addProduct',
         nextStep: 'awaiting_intent'
@@ -56,7 +62,15 @@ describe('FlowController', () => {
   const testMessages = {
     welcome: 'Welcome!',
     intent_prompt: 'Choose: 1 or 2',
-    invalid_choice: 'Invalid choice'
+    invalid_choice: 'Invalid choice',
+    add_product_prompt: 'Enter product details:\nName:\nPrice:\nStock:',
+    add_product_received: 'Product "{name}" added successfully!',
+    add_product_missing_fields: 'Please provide the missing fields:\n\n{missing_fields}',
+    add_product_current_values: 'Current values:\n{current_values}',
+    add_product_cancelled: 'Product creation cancelled.',
+    validation_error_name: 'Name must not be empty',
+    validation_error_price: 'Price must be a valid number (e.g., 29.99)',
+    validation_error_stock: 'Stock must be a whole number (e.g., 10)'
   }
 
   function createMockMemory(): MemoryManager & { sessions: Map<string, Session> } {
@@ -301,7 +315,7 @@ describe('FlowController', () => {
       expect(updatedSession?.currentStep).toBe('awaiting_intent')
     })
 
-    it('should include action as preMessage and next step buttons in response', async () => {
+    it('should transition to input step when add is selected', async () => {
       const memory = createMockMemory()
       const session = memory.createSession('chat123', 'awaiting_intent')
       memory.sessions.set('chat123', session)
@@ -315,10 +329,159 @@ describe('FlowController', () => {
 
       const result = await controller.process('chat123', '2')
 
-      expect(result.preMessage).toBe('[Action: addProduct]')
+      expect(result.handled).toBe(true)
+      expect(result.response).toContain('Enter product details')
+      const updatedSession = memory.sessions.get('chat123')
+      expect(updatedSession?.currentStep).toBe('add_product')
+    })
+
+    it('should process product input and return confirmation with buttons', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'add_product')
+      memory.sessions.set('chat123', session)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger
+      })
+
+      const result = await controller.process('chat123', 'Name: Test Product\nPrice: 19.99\nStock: 5')
+
+      expect(result.handled).toBe(true)
+      expect(result.preMessage).toBe('Product "Test Product" added successfully!')
       expect(result.buttons).toBeDefined()
       expect(result.buttons?.body).toBe('Choose: 1 or 2')
-      expect(result.buttons?.options).toHaveLength(2)
+    })
+
+    it('should reject invalid price and ask again', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'add_product')
+      memory.sessions.set('chat123', session)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger
+      })
+
+      const result = await controller.process('chat123', 'Name: Test Product\nPrice: abc\nStock: 5')
+
+      expect(result.handled).toBe(true)
+      expect(result.response).toContain('Price must be a valid number')
+      expect(result.response).toContain('Name: Test Product')
+      expect(result.response).toContain('Stock: 5')
+      const updatedSession = memory.sessions.get('chat123')
+      expect(updatedSession?.currentStep).toBe('add_product')
+    })
+
+    it('should reject invalid stock and ask again', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'add_product')
+      memory.sessions.set('chat123', session)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger
+      })
+
+      const result = await controller.process('chat123', 'Name: Test Product\nPrice: 19.99\nStock: -5')
+
+      expect(result.handled).toBe(true)
+      expect(result.response).toContain('Stock must be a whole number')
+      expect(result.response).toContain('Name: Test Product')
+      expect(result.response).toContain('Price: 19.99')
+      const updatedSession = memory.sessions.get('chat123')
+      expect(updatedSession?.currentStep).toBe('add_product')
+    })
+
+    it('should ask for missing fields when partial input provided', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'add_product')
+      memory.sessions.set('chat123', session)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger
+      })
+
+      const result = await controller.process('chat123', 'Name: Test Product')
+
+      expect(result.handled).toBe(true)
+      expect(result.response).toContain('Name: Test Product')
+      expect(result.response).toContain('Price: 29.99')
+      expect(result.response).toContain('Stock: 10')
+      const updatedSession = memory.sessions.get('chat123')
+      expect(updatedSession?.currentStep).toBe('add_product')
+    })
+
+    it('should remember values across multiple inputs', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'add_product')
+      session.context.productData = { name: 'Existing Product', price: 10.00 }
+      memory.sessions.set('chat123', session)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger
+      })
+
+      const result = await controller.process('chat123', 'Stock: 15')
+
+      expect(result.handled).toBe(true)
+      expect(result.preMessage).toBe('Product "Existing Product" added successfully!')
+      expect(result.buttons).toBeDefined()
+      expect(result.buttons?.body).toBe('Choose: 1 or 2')
+    })
+
+    it('should cancel add product when stop is sent', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'add_product')
+      session.context.productData = { name: 'Partial Product', price: 10.00 }
+      memory.sessions.set('chat123', session)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger
+      })
+
+      const result = await controller.process('chat123', 'stop')
+
+      expect(result.handled).toBe(true)
+      expect(result.buttons).toBeDefined()
+      expect(result.buttons?.header).toBe('Product creation cancelled.')
+      expect(result.buttons?.body).toBe('Choose: 1 or 2')
+      const updatedSession = memory.sessions.get('chat123')
+      expect(updatedSession?.currentStep).toBe('awaiting_intent')
+      expect(updatedSession?.context.productData).toBeUndefined()
+    })
+
+    it('should cancel with STOP (case insensitive)', async () => {
+      const memory = createMockMemory()
+      const session = memory.createSession('chat123', 'add_product')
+      memory.sessions.set('chat123', session)
+
+      const controller = createFlowController({
+        memory,
+        flow: testFlow,
+        messages: testMessages,
+        logger: mockLogger
+      })
+
+      const result = await controller.process('chat123', '  STOP  ')
+
+      expect(result.handled).toBe(true)
+      expect(result.buttons?.header).toBe('Product creation cancelled.')
     })
   })
 

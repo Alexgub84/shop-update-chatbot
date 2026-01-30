@@ -50,7 +50,15 @@ A working production-ready app that:
 (none)
 
 ### Pending
-- [ ] Implement actual addProduct action (with OpenAI parsing)
+- [ ] Implement actual addProduct action (WooCommerce API call to create product)
+- [ ] Investigate better validation approach for product fields (consider Zod schemas, reusable validators, better error messages)
+
+### Completed (Step 2 - Add Product Input Flow)
+- [x] Input step type with field collection (name, price, stock, description)
+- [x] Field validation (price must be number, stock must be integer)
+- [x] Memory persistence for partial inputs across conversation turns
+- [x] Validation error messages for invalid field types
+- [x] Auto-generated SKU (UUID) on product completion
 
 ### Deployment
 - [x] GitHub Actions workflow for Railway deployment

@@ -28,6 +28,12 @@
       "nextStep": "awaiting_intent"
     },
     "add_product": {
+      "type": "input",
+      "messageKey": "add_product_prompt",
+      "contextKey": "productInput",
+      "nextStep": "process_add_product"
+    },
+    "process_add_product": {
       "type": "action",
       "action": "addProduct",
       "nextStep": "awaiting_intent"

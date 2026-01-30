@@ -294,6 +294,250 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - List Click (docker-test:fake-gre
   }, 15000)
 })
 
+describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-greenapi-add-product)', () => {
+  const TEST_NAME = 'FAKE-GREENAPI-ADD-PRODUCT'
+  const CHAT_ID = 'add-product-test-user@c.us'
+  const TRIGGER_MESSAGE = 'test-shop'
+  const ADD_PRODUCT_CONTAINER = 'shop-update-chatbot-add-product-test'
+  const ADD_PRODUCT_PORT = 3094
+
+  beforeAll(() => {
+    logStep(TEST_NAME, 'Cleanup: Removing any existing test container')
+    execSilent(`docker rm -f ${ADD_PRODUCT_CONTAINER}`)
+  }, 10000)
+
+  afterAll(() => {
+    logStep(TEST_NAME, 'Cleanup: Removing test container')
+    execSilent(`docker rm -f ${ADD_PRODUCT_CONTAINER}`)
+  }, 10000)
+
+  it('builds image for Add Product test', () => {
+    logStep(TEST_NAME, 'Building Docker image')
+    expect(() => {
+      execSync(`docker build -t ${IMAGE_NAME} .`, { stdio: 'inherit' })
+    }).not.toThrow()
+    logStep(TEST_NAME, 'Docker image built successfully')
+  }, 120000)
+
+  it('starts container with FAKE_GREENAPI_MODE enabled', async () => {
+    logStep(TEST_NAME, 'Starting container with FAKE_GREENAPI_MODE=true')
+    exec(`docker run -d \
+      --name ${ADD_PRODUCT_CONTAINER} \
+      -p ${ADD_PRODUCT_PORT}:${ADD_PRODUCT_PORT} \
+      -e PORT=${ADD_PRODUCT_PORT} \
+      -e FAKE_GREENAPI_MODE=true \
+      -e "TRIGGER_CODE=${TRIGGER_MESSAGE}" \
+      -e GREEN_API_INSTANCE_ID=add-product-instance \
+      -e GREEN_API_TOKEN=add-product-token \
+      -e WOOCOMMERCE_STORE_URL=https://test-store.com \
+      -e WOOCOMMERCE_CONSUMER_KEY=ck_test_key \
+      -e WOOCOMMERCE_CONSUMER_SECRET=cs_test_secret \
+      -e LOG_LEVEL=info \
+      ${IMAGE_NAME}`)
+
+    logStep(TEST_NAME, 'Waiting for container to become healthy')
+    const healthy = await waitForHealthy(`http://localhost:${ADD_PRODUCT_PORT}/health`, 15000)
+    
+    if (!healthy) {
+      const logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+      console.error('Container logs:', logs)
+    }
+    
+    logStep(TEST_NAME, healthy ? 'Container is healthy' : 'Container health check FAILED')
+    expect(healthy).toBe(true)
+  }, 30000)
+
+  it('Step 1: Send trigger message - receives interactive buttons', async () => {
+    logStep(TEST_NAME, `Sending trigger message "${TRIGGER_MESSAGE}"`)
+    
+    const response = await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload(TRIGGER_MESSAGE, CHAT_ID))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.handled).toBe(true)
+    logStep(TEST_NAME, 'Trigger message processed successfully')
+
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    const logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    expect(logs).toContain('FAKE_GREENAPI_SEND_BUTTONS')
+    expect(logs).toContain('Add New Product')
+    logStep(TEST_NAME, 'Verified interactive buttons were sent')
+  }, 10000)
+
+  it('Step 2: Click "Add" button - receives product input prompt', async () => {
+    logStep(TEST_NAME, 'Sending "add" to start add product flow')
+    
+    const response = await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('add', CHAT_ID))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.handled).toBe(true)
+    logStep(TEST_NAME, '"Add" command processed successfully')
+
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    const logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    expect(logs).toContain('choice_selected')
+    expect(logs).toContain('FAKE_GREENAPI_SEND_MESSAGE')
+    expect(logs).toContain('Name:')
+    expect(logs).toContain('Price:')
+    expect(logs).toContain('Stock:')
+    expect(logs).toContain('stop')
+    logStep(TEST_NAME, 'Verified product input prompt was sent')
+  }, 10000)
+
+  it('Step 3: Send valid product details - receives confirmation with SKU', async () => {
+    logStep(TEST_NAME, 'Sending valid product details')
+    
+    const productInput = 'Name: Test Docker Product\nPrice: 49.99\nStock: 25\nDescription: A product added via Docker test'
+    
+    const response = await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload(productInput, CHAT_ID))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.handled).toBe(true)
+    logStep(TEST_NAME, 'Product details processed successfully')
+
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    const logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    
+    expect(logs).toContain('input_received')
+    expect(logs).toContain('product_data_updated')
+    expect(logs).toContain('add_product_processing')
+    logStep(TEST_NAME, 'Verified product data was processed')
+
+    expect(logs).toContain('Test Docker Product')
+    expect(logs).toContain('49.99')
+    expect(logs).toContain('25')
+    logStep(TEST_NAME, 'Verified product details in logs')
+
+    expect(logs).toContain('FAKE_GREENAPI_SEND_MESSAGE')
+    expect(logs).toContain('Product added successfully!')
+    expect(logs).toContain('Test Docker Product')
+    logStep(TEST_NAME, 'Verified confirmation message was sent')
+
+    expect(logs).toContain('FAKE_GREENAPI_SEND_BUTTONS')
+    logStep(TEST_NAME, 'Verified buttons were sent again after product added')
+    
+    logStep(TEST_NAME, 'Add Product flow test completed successfully!')
+  }, 10000)
+
+  it('Step 4: Test partial input then complete - remembers values', async () => {
+    const PARTIAL_CHAT_ID = 'partial-input-test@c.us'
+    
+    logStep(TEST_NAME, 'Starting new session for partial input test')
+    await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload(TRIGGER_MESSAGE, PARTIAL_CHAT_ID))
+    })
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    logStep(TEST_NAME, 'Clicking Add button')
+    await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('add', PARTIAL_CHAT_ID))
+    })
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    logStep(TEST_NAME, 'Sending partial input (only Name)')
+    await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('Name: Partial Product', PARTIAL_CHAT_ID))
+    })
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    let logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    expect(logs).toContain('Partial Product')
+    expect(logs).toContain('missing fields')
+    logStep(TEST_NAME, 'Verified partial input stored and missing fields requested')
+
+    logStep(TEST_NAME, 'Sending remaining fields (Price and Stock)')
+    const response = await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('Price: 99.99\nStock: 50', PARTIAL_CHAT_ID))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    expect(logs).toContain('add_product_processing')
+    expect(logs).toContain('Partial Product')
+    expect(logs).toContain('99.99')
+    expect(logs).toContain('50')
+    expect(logs).toContain('Product added successfully!')
+    logStep(TEST_NAME, 'Verified product completed with remembered values')
+
+    const buttonMatches = logs.match(/FAKE_GREENAPI_SEND_BUTTONS/g)
+    expect(buttonMatches).not.toBeNull()
+    expect(buttonMatches!.length).toBeGreaterThanOrEqual(3)
+    logStep(TEST_NAME, 'Verified menu buttons sent again after product added')
+    logStep(TEST_NAME, 'Partial input test completed successfully!')
+  }, 20000)
+
+  it('Step 5: Test stop command cancels flow', async () => {
+    const STOP_CHAT_ID = 'stop-test@c.us'
+    
+    logStep(TEST_NAME, 'Starting new session for stop command test')
+    await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload(TRIGGER_MESSAGE, STOP_CHAT_ID))
+    })
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    logStep(TEST_NAME, 'Clicking Add button')
+    await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('add', STOP_CHAT_ID))
+    })
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    logStep(TEST_NAME, 'Sending stop command')
+    const response = await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('stop', STOP_CHAT_ID))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    const logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    expect(logs).toContain('input_cancelled')
+    expect(logs).toContain('cancelled')
+    expect(logs).toContain('FAKE_GREENAPI_SEND_BUTTONS')
+    logStep(TEST_NAME, 'Verified stop command cancelled flow and returned to menu')
+    logStep(TEST_NAME, 'Stop command test completed successfully!')
+  }, 15000)
+})
+
 describe('Docker: WooCommerce Integration - List Products (docker-test:woocommerce-integration)', () => {
   const TEST_NAME = 'WOOCOMMERCE-INTEGRATION'
   const CHAT_ID = 'woocommerce-test-user@c.us'

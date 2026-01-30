@@ -1,6 +1,6 @@
 {
   "name": "shop-update-chatbot",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "WhatsApp chatbot for shop inventory management via Green API",
   "type": "module",
   "main": "dist/index.js",

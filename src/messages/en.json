@@ -3,5 +3,13 @@
   "intent_prompt": "What would you like to do?\n\n1️⃣ List Products\n2️⃣ Add New Product",
   "invalid_choice": "Please reply with 1 or 2",
   "session_expired": "Session expired. Send trigger to start again.",
-  "no_products_found": "No products found in your store. Add some products first!"
+  "no_products_found": "No products found in your store. Add some products first!",
+  "add_product_prompt": "Please provide the product details in this format:\n\nName: Product Name\nPrice: 29.99\nStock: 10\nDescription: Product description (optional)\n\nSend \"stop\" to cancel.",
+  "add_product_cancelled": "Product creation cancelled.",
+  "add_product_missing_fields": "Please provide the missing fields:\n\n{missing_fields}",
+  "add_product_current_values": "Current values:\n{current_values}",
+  "validation_error_name": "Name must not be empty",
+  "validation_error_price": "Price must be a valid number (e.g., 29.99)",
+  "validation_error_stock": "Stock must be a whole number (e.g., 10)",
+  "add_product_received": "Product \"{name}\" added successfully!"
 }

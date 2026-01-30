@@ -42,6 +42,7 @@ export interface ChoiceStep extends BaseStep {
 export interface InputStep extends BaseStep {
   type: 'input'
   messageKey: string
+  contextKey: string
   nextStep: StepId
 }
 
