@@ -11,7 +11,9 @@
     "test": "npm run lint && vitest run",
     "test:watch": "vitest",
     "test:prod": "vitest run --config vitest.config.prod.ts",
-    "test:docker": "vitest run tests/docker/docker.test.ts",
+    "test:docker": "vitest run --config vitest.config.docker.ts",
+    "docker-test:production-health": "vitest run --config vitest.config.docker.ts --testNamePattern='Production Health'",
+    "docker-test:fake-greenapi-whatsapp-flow-list-click": "vitest run --config vitest.config.docker.ts --testNamePattern='FAKE GreenAPI'",
     "lint": "tsc --noEmit",
     "docker:build": "docker build -t shop-update-chatbot .",
     "docker:run": "docker run --rm --env-file .env -p 3000:3000 shop-update-chatbot"

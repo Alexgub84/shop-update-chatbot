@@ -138,3 +138,42 @@ export function createMockSender(logger: Logger): GreenApiSender {
 
   return { sendMessage, sendButtons }
 }
+
+export function createFakeGreenApiSender(logger: Logger): GreenApiSender {
+  let messageCounter = 0
+
+  async function sendMessage(chatId: string, message: string): Promise<SendMessageResponse> {
+    messageCounter++
+    const idMessage = `fake-greenapi-msg-${messageCounter}`
+
+    logger.info({
+      event: 'FAKE_GREENAPI_SEND_MESSAGE',
+      mode: 'FAKE GreenAPI',
+      chatId,
+      message,
+      idMessage
+    })
+
+    return { idMessage }
+  }
+
+  async function sendButtons(params: SendButtonsParams): Promise<SendMessageResponse> {
+    messageCounter++
+    const idMessage = `fake-greenapi-buttons-${messageCounter}`
+
+    logger.info({
+      event: 'FAKE_GREENAPI_SEND_BUTTONS',
+      mode: 'FAKE GreenAPI',
+      chatId: params.chatId,
+      header: params.header,
+      body: params.body,
+      buttons: params.buttons.map(b => ({ id: b.buttonId, text: b.buttonText })),
+      footer: params.footer,
+      idMessage
+    })
+
+    return { idMessage }
+  }
+
+  return { sendMessage, sendButtons }
+}

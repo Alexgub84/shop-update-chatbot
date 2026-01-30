@@ -14,6 +14,7 @@ const configSchema = z.object({
   port: z.coerce.number().int().min(1).max(65535).default(3000),
   logLevel: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   mockMode: coerceBooleanFromEnvVar,
+  fakeGreenApiMode: coerceBooleanFromEnvVar,
   triggerCode: z.string().min(1).optional(),
   sessionTimeoutMs: z.coerce.number().int().min(1000).default(300000),
   greenApi: z.object({
@@ -40,6 +41,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: env.PORT,
     logLevel: env.LOG_LEVEL,
     mockMode: env.MOCK_MODE,
+    fakeGreenApiMode: env.FAKE_GREENAPI_MODE,
     triggerCode: env.TRIGGER_CODE,
     sessionTimeoutMs: env.SESSION_TIMEOUT_MS,
     greenApi: {

@@ -55,6 +55,8 @@ A working production-ready app that:
 - [x] Railway configuration (railway.json)
 - [x] Dockerfile for production builds
 - [x] Docker integration tests (tests/docker/docker.test.ts)
+  - `docker-test:production-health` - Build image, run container, verify /health
+  - `docker-test:fake-greenapi-whatsapp-flow-list-click` - FAKE GreenAPI flow test with button interaction
 
 ---
 
@@ -129,6 +131,27 @@ Run tests: `npm test` (60 tests)
 | `TRIGGER_CODE` | Message to start conversation flow | (any message) |
 | `SESSION_TIMEOUT_MS` | Session inactivity timeout | 300000 (5 min) |
 | `MOCK_MODE` | Use mock sender (no API calls) | false |
+
+---
+
+## Deployment Checklist
+
+When adding new features, verify these items before deploying:
+
+### Adding New Asset Directories (JSON, templates, static files)
+TypeScript compiler (`tsc`) only outputs `.ts` files. Non-TS assets must be copied manually in the Dockerfile.
+
+**Current asset directories copied in Dockerfile:**
+- `src/messages/` → `dist/messages/`
+- `src/flows/` → `dist/flows/`
+
+**When adding a new asset directory:**
+1. Create the directory under `src/` (e.g., `src/templates/`)
+2. Add COPY instruction to Dockerfile production stage:
+   ```dockerfile
+   COPY src/templates/ ./dist/templates/
+   ```
+3. Run `npm run docker:build && npm run test:prod` to verify
 
 ---
 

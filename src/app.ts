@@ -1,7 +1,7 @@
 import { loadConfig, type Config } from './config.js'
 import { createLogger, type Logger } from './logger.js'
 import { loadMessages, type Messages } from './messages.js'
-import { createGreenApiSender, createMockSender, type GreenApiSender } from './greenapi/sender.js'
+import { createGreenApiSender, createMockSender, createFakeGreenApiSender, type GreenApiSender } from './greenapi/sender.js'
 import { createWebhookHandler, type WebhookHandler } from './webhook/handler.js'
 import { createInMemoryManager } from './conversation/memory.js'
 import { createFlowController, type FlowController } from './conversation/flow-controller.js'
@@ -42,12 +42,15 @@ export function createApp(): App {
   const messages = loadMessages()
   const flow = loadFlow()
 
-  const sender = config.mockMode
-    ? createMockSender(logger)
-    : createGreenApiSender(config.greenApi, logger)
-
-  if (config.mockMode) {
+  let sender: GreenApiSender
+  if (config.fakeGreenApiMode) {
+    sender = createFakeGreenApiSender(logger)
+    logger.warn({ event: 'fake_greenapi_mode_enabled', mode: 'FAKE GreenAPI' })
+  } else if (config.mockMode) {
+    sender = createMockSender(logger)
     logger.warn({ event: 'mock_mode_enabled' })
+  } else {
+    sender = createGreenApiSender(config.greenApi, logger)
   }
 
   const memory = createInMemoryManager(config.sessionTimeoutMs)

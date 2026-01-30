@@ -8,6 +8,14 @@ A log of mistakes, bugs, and issues we've encountered with their solutions.
 
 <!-- Add new entries at the top -->
 
+### [Infra] Copy Non-TS Assets in Dockerfile
+**Date:** 2026-01-30
+**Problem:** `ENOENT` error for `/app/dist/flows/inventory.json` on deployment - TypeScript compiler only outputs `.ts` files, not JSON assets
+**Solution:** Added `COPY src/flows/ ./dist/flows/` to Dockerfile production stage
+**Prevention:** When adding new asset directories (JSON, templates, etc.), always add corresponding COPY instruction in Dockerfile
+
+---
+
 ### [Logic] Use Self-Explanatory Names
 **Date:** 2026-01-30
 **Problem:** Abbreviated or unclear variable/function names reduce code readability (e.g., `del`, `deps`, `fetchFn`)

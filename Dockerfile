@@ -22,7 +22,11 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
+
+# Copy non-TS assets (tsc only outputs .ts files, not JSON/templates)
+# When adding new asset directories, add COPY instruction here
 COPY src/messages/ ./dist/messages/
+COPY src/flows/ ./dist/flows/
 
 USER node
 
