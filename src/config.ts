@@ -15,6 +15,18 @@ const configSchema = z.object({
 
 export type Config = z.infer<typeof configSchema>
 
+function fieldToEnvVar(field: string): string {
+  const mapping: Record<string, string> = {
+    'port': 'PORT',
+    'logLevel': 'LOG_LEVEL',
+    'mockMode': 'MOCK_MODE',
+    'triggerCode': 'TRIGGER_CODE',
+    'greenApi.instanceId': 'GREEN_API_INSTANCE_ID',
+    'greenApi.token': 'GREEN_API_TOKEN'
+  }
+  return mapping[field] || field.toUpperCase()
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const result = configSchema.safeParse({
     port: env.PORT,
@@ -28,11 +40,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   })
 
   if (!result.success) {
-    const errors = result.error.errors.map(e => ({
-      field: e.path.join('.'),
-      message: e.message
-    }))
+    const missingVars: string[] = []
+    const errors = result.error.errors.map(e => {
+      const field = e.path.join('.')
+      const envVarName = fieldToEnvVar(field)
+      if (e.code === 'invalid_type' && e.received === 'undefined') {
+        missingVars.push(envVarName)
+      }
+      return { field, envVar: envVarName, message: e.message }
+    })
+
     logger.error({ event: 'config_validation_failed', errors })
+    
+    if (missingVars.length > 0) {
+      logger.error({ 
+        event: 'missing_environment_variables', 
+        missing: missingVars,
+        hint: 'Add these variables to your Railway environment or .env file'
+      })
+    }
     
     const firstError = result.error.errors[0]
     const field = firstError.path.join('.')
