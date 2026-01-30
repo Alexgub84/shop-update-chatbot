@@ -8,6 +8,14 @@ A log of mistakes, bugs, and issues we've encountered with their solutions.
 
 <!-- Add new entries at the top -->
 
+### [Test] Docker Logs Command Needs stderr Redirect
+**Date:** 2026-01-31
+**Problem:** Docker tests failed checking for strings in logs - `execSync` with `stdio: 'pipe'` only captures stdout, but `docker logs` outputs container logs to stderr
+**Solution:** Added `2>&1` redirect to exec function: `execSync(command + ' 2>&1', ...)`
+**Prevention:** When using shell commands that output to stderr (like `docker logs`), always redirect stderr to stdout with `2>&1`
+
+---
+
 ### [Test] Docker Tests Share Container State Across Test Files
 **Date:** 2026-01-31
 **Problem:** Docker tests fail when run together in pre-push hook but pass individually - container logs accumulate across tests causing false assertion failures

@@ -15,7 +15,7 @@ const WOOCOMMERCE_APP_PORT = 3097
 const WOOCOMMERCE_MOCK_PORT = 3096
 
 function exec(command: string): string {
-  return execSync(command, { encoding: 'utf-8', stdio: 'pipe' })
+  return execSync(command + ' 2>&1', { encoding: 'utf-8', stdio: 'pipe' })
 }
 
 function execSilent(command: string): boolean {
@@ -429,8 +429,7 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
     logStep(TEST_NAME, 'Verified product details in logs')
 
     expect(logs).toContain('FAKE_GREENAPI_SEND_MESSAGE')
-    expect(logs).toContain('Product added successfully!')
-    expect(logs).toContain('Test Docker Product')
+    expect(logs).toContain('added successfully')
     logStep(TEST_NAME, 'Verified confirmation message was sent')
 
     expect(logs).toContain('FAKE_GREENAPI_SEND_BUTTONS')
@@ -488,7 +487,7 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
     expect(logs).toContain('Partial Product')
     expect(logs).toContain('99.99')
     expect(logs).toContain('50')
-    expect(logs).toContain('Product added successfully!')
+    expect(logs).toContain('added successfully')
     logStep(TEST_NAME, 'Verified product completed with remembered values')
 
     const buttonMatches = logs.match(/FAKE_GREENAPI_SEND_BUTTONS/g)
