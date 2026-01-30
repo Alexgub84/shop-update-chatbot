@@ -8,6 +8,14 @@ A log of mistakes, bugs, and issues we've encountered with their solutions.
 
 <!-- Add new entries at the top -->
 
+### [Logic] Wrap All HTTP Request Operations in Try/Catch
+**Date:** 2026-01-31
+**Problem:** HTTP requests only caught network errors (fetch failure) but not response body read errors or JSON parse errors - these could throw unlogged exceptions
+**Solution:** Wrap every async operation in HTTP requests: `fetch()`, `response.text()`, and `response.json()` each need their own try/catch with appropriate error logging
+**Prevention:** When writing HTTP client methods, always wrap: (1) fetch call, (2) response body read, (3) JSON parsing. Log each error type with distinct event names before re-throwing
+
+---
+
 ### [Test] Docker Logs Command Needs stderr Redirect
 **Date:** 2026-01-31
 **Problem:** Docker tests failed checking for strings in logs - `execSync` with `stdio: 'pipe'` only captures stdout, but `docker logs` outputs container logs to stderr

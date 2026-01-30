@@ -47,7 +47,14 @@ export function createMockWooCommerceServer(port = 0): MockWooCommerceServer {
       })
     }
 
-    const perPage = Number((request.query as Record<string, string>).per_page) || 10
+    const query = request.query as Record<string, string>
+    
+    if (query.sku) {
+      const matchingProduct = products.find(p => p.sku === query.sku)
+      return reply.status(200).send(matchingProduct ? [matchingProduct] : [])
+    }
+
+    const perPage = Number(query.per_page) || 10
     const pagedProducts = products.slice(0, perPage)
 
     return reply.status(200).send(pagedProducts)

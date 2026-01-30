@@ -48,6 +48,11 @@
   * Fetching product list from WooCommerce.
   * Creating a new product in WooCommerce.
 * The system must trigger outbound HTTP requests to OpenAI only for parsing or normalization, not for business logic.
+* Every HTTP request must be wrapped in try/catch with error logging:
+  * Network errors (fetch failure) must be caught and logged.
+  * Non-OK responses must log status code and response body.
+  * JSON parsing errors must be caught and logged.
+  * All errors must throw custom error classes with appropriate context.
 
 8. **Session state**
 

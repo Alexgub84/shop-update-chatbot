@@ -3,9 +3,11 @@ import type { WooCommerceClient, WooProduct } from '../../src/woocommerce/types.
 
 export function createMockWooCommerceClient(): WooCommerceClient & {
   getProducts: ReturnType<typeof vi.fn>
+  getProductBySku: ReturnType<typeof vi.fn>
 } {
   return {
-    getProducts: vi.fn().mockResolvedValue([])
+    getProducts: vi.fn().mockResolvedValue([]),
+    getProductBySku: vi.fn().mockResolvedValue(null)
   }
 }
 

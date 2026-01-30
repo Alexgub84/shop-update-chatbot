@@ -21,4 +21,5 @@ export interface WooProduct {
 
 export interface WooCommerceClient {
   getProducts(perPage?: number): Promise<WooProduct[]>
+  getProductBySku(sku: string): Promise<WooProduct | null>
 }
