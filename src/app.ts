@@ -6,6 +6,8 @@ import { createWebhookHandler, type WebhookHandler } from './webhook/handler.js'
 import { createInMemoryManager } from './conversation/memory.js'
 import { createFlowController, type FlowController } from './conversation/flow-controller.js'
 import type { FlowDefinition, MemoryManager } from './conversation/types.js'
+import { createWooCommerceClient } from './woocommerce/client.js'
+import type { WooCommerceClient } from './woocommerce/types.js'
 import { createServer } from './server.js'
 import type { FastifyInstance } from 'fastify'
 import { readFileSync } from 'fs'
@@ -20,6 +22,7 @@ export interface AppDependencies {
   logger: Logger
   messages: Messages
   sender: GreenApiSender
+  wooCommerce: WooCommerceClient
   memory: MemoryManager
   flowController: FlowController
   webhookHandler: WebhookHandler
@@ -53,6 +56,8 @@ export function createApp(): App {
     sender = createGreenApiSender(config.greenApi, logger)
   }
 
+  const wooCommerce = createWooCommerceClient(config.wooCommerce, logger)
+
   const memory = createInMemoryManager(config.sessionTimeoutMs)
 
   const flowController = createFlowController({
@@ -75,6 +80,6 @@ export function createApp(): App {
 
   return {
     server,
-    dependencies: { config, logger, messages, sender, memory, flowController, webhookHandler }
+    dependencies: { config, logger, messages, sender, wooCommerce, memory, flowController, webhookHandler }
   }
 }

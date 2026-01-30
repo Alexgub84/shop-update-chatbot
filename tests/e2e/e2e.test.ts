@@ -12,6 +12,9 @@ describe('E2E: Webhook Flow', () => {
     process.env.TRIGGER_CODE = 'test-shop'
     process.env.GREEN_API_INSTANCE_ID = 'test-instance'
     process.env.GREEN_API_TOKEN = 'test-token'
+    process.env.WOOCOMMERCE_STORE_URL = 'https://test-store.com'
+    process.env.WOOCOMMERCE_CONSUMER_KEY = 'ck_test_key'
+    process.env.WOOCOMMERCE_CONSUMER_SECRET = 'cs_test_secret'
 
     app = createApp()
     server = app.server

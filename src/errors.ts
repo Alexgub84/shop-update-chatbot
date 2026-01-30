@@ -33,3 +33,15 @@ export class WebhookError extends Error {
     super(message)
   }
 }
+
+export class WooCommerceError extends Error {
+  readonly name = 'WooCommerceError'
+
+  constructor(
+    message: string,
+    public readonly statusCode?: number,
+    options?: ErrorOptions
+  ) {
+    super(message, options)
+  }
+}

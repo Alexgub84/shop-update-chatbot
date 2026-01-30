@@ -20,6 +20,11 @@ const configSchema = z.object({
   greenApi: z.object({
     instanceId: z.string({ required_error: 'GREEN_API_INSTANCE_ID is required' }).min(1, 'GREEN_API_INSTANCE_ID cannot be empty'),
     token: z.string({ required_error: 'GREEN_API_TOKEN is required' }).min(1, 'GREEN_API_TOKEN cannot be empty')
+  }),
+  wooCommerce: z.object({
+    storeUrl: z.string({ required_error: 'WOOCOMMERCE_STORE_URL is required' }).min(1, 'WOOCOMMERCE_STORE_URL cannot be empty'),
+    consumerKey: z.string({ required_error: 'WOOCOMMERCE_CONSUMER_KEY is required' }).min(1, 'WOOCOMMERCE_CONSUMER_KEY cannot be empty'),
+    consumerSecret: z.string({ required_error: 'WOOCOMMERCE_CONSUMER_SECRET is required' }).min(1, 'WOOCOMMERCE_CONSUMER_SECRET cannot be empty')
   })
 })
 
@@ -31,7 +36,10 @@ function fieldToEnvVar(field: string): string {
     'logLevel': 'LOG_LEVEL',
     'mockMode': 'MOCK_MODE',
     'greenApi.instanceId': 'GREEN_API_INSTANCE_ID',
-    'greenApi.token': 'GREEN_API_TOKEN'
+    'greenApi.token': 'GREEN_API_TOKEN',
+    'wooCommerce.storeUrl': 'WOOCOMMERCE_STORE_URL',
+    'wooCommerce.consumerKey': 'WOOCOMMERCE_CONSUMER_KEY',
+    'wooCommerce.consumerSecret': 'WOOCOMMERCE_CONSUMER_SECRET'
   }
   return mapping[field] || field.toUpperCase()
 }
@@ -47,6 +55,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     greenApi: {
       instanceId: env.GREEN_API_INSTANCE_ID,
       token: env.GREEN_API_TOKEN
+    },
+    wooCommerce: {
+      storeUrl: env.WOOCOMMERCE_STORE_URL,
+      consumerKey: env.WOOCOMMERCE_CONSUMER_KEY,
+      consumerSecret: env.WOOCOMMERCE_CONSUMER_SECRET
     }
   })
 

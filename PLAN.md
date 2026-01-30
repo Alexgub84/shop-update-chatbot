@@ -25,6 +25,7 @@ A working production-ready app that:
 - [x] Refactored webhook handler to delegate to FlowController
 - [x] Updated app.ts wiring with all new modules
 - [x] E2E tests for multi-turn conversations
+- [x] WooCommerceClient service with getProducts() method (injectable, tested)
 
 ### Completed (Step 1)
 - [x] Initialize project: package.json, tsconfig.json, vitest.config.ts
@@ -47,7 +48,7 @@ A working production-ready app that:
 (none)
 
 ### Pending
-- [ ] Implement actual listProducts action (WooCommerce integration)
+- [ ] Wire WooCommerceClient.getProducts() into listProducts action
 - [ ] Implement actual addProduct action (with OpenAI parsing)
 
 ### Deployment
@@ -86,6 +87,9 @@ src/
 │   └── types.ts          # Zod schemas for webhook payloads
 ├── greenapi/
 │   └── sender.ts         # Sends messages + buttons via Green API
+├── woocommerce/
+│   ├── types.ts          # WooCommerceConfig, WooProduct, WooCommerceClient interface
+│   └── client.ts         # createWooCommerceClient factory function
 ├── conversation/
 │   ├── types.ts          # Session, Step, FlowDefinition types + MemoryManager interface
 │   ├── memory.ts         # createInMemoryManager implementation
@@ -101,13 +105,15 @@ tests/
 │   ├── memory.test.ts    # MemoryManager tests
 │   ├── flow-controller.test.ts # FlowController tests
 │   ├── sender.test.ts    # Green API sender tests
+│   ├── woocommerce.test.ts # WooCommerce client tests
 │   └── webhook.test.ts   # Webhook handler tests
 ├── e2e/
 │   └── e2e.test.ts       # Full flow tests
 ├── docker/
 │   └── docker.test.ts    # Docker integration tests
 └── mocks/
-    └── greenapi.ts       # Mock factories
+    ├── greenapi.ts       # Mock factories for Green API
+    └── woocommerce.ts    # Mock factories for WooCommerce
 
 Dockerfile                # Production multi-stage build
 ```
@@ -121,8 +127,9 @@ All modules use dependency injection for testability:
 - `webhook/handler.ts` - accepts `{ flowController, sender, logger }` (all mockable)
 - `flow-controller.ts` - accepts `{ memory, flow, messages, triggerCode?, logger }` (all mockable)
 - `memory.ts` - implements `MemoryManager` interface (swappable with DB or mock)
+- `woocommerce/client.ts` - accepts `fetchFn` parameter (mock fetch in tests)
 
-Run tests: `npm test` (60 tests)
+Run tests: `npm test` (70 tests)
 
 ## Configuration
 
@@ -131,6 +138,9 @@ Run tests: `npm test` (60 tests)
 | `TRIGGER_CODE` | Message to start conversation flow | (any message) |
 | `SESSION_TIMEOUT_MS` | Session inactivity timeout | 300000 (5 min) |
 | `MOCK_MODE` | Use mock sender (no API calls) | false |
+| `WOOCOMMERCE_STORE_URL` | WooCommerce store URL (e.g., https://alexgub.com) | required |
+| `WOOCOMMERCE_CONSUMER_KEY` | WooCommerce REST API consumer key | required |
+| `WOOCOMMERCE_CONSUMER_SECRET` | WooCommerce REST API consumer secret | required |
 
 ---
 

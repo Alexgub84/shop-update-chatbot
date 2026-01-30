@@ -82,6 +82,9 @@ describe('Docker: Production Health (docker-test:production-health)', () => {
       -e TRIGGER_CODE=test-shop \
       -e GREEN_API_INSTANCE_ID=test-instance \
       -e GREEN_API_TOKEN=test-token \
+      -e WOOCOMMERCE_STORE_URL=https://test-store.com \
+      -e WOOCOMMERCE_CONSUMER_KEY=ck_test_key \
+      -e WOOCOMMERCE_CONSUMER_SECRET=cs_test_secret \
       -e LOG_LEVEL=info \
       ${IMAGE_NAME}`)
 
@@ -156,6 +159,9 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - List Click (docker-test:fake-gre
       -e "TRIGGER_CODE=${TRIGGER_MESSAGE}" \
       -e GREEN_API_INSTANCE_ID=fake-instance \
       -e GREEN_API_TOKEN=fake-token \
+      -e WOOCOMMERCE_STORE_URL=https://test-store.com \
+      -e WOOCOMMERCE_CONSUMER_KEY=ck_test_key \
+      -e WOOCOMMERCE_CONSUMER_SECRET=cs_test_secret \
       -e LOG_LEVEL=info \
       ${IMAGE_NAME}`)
 
