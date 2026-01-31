@@ -8,6 +8,7 @@ export interface WooProduct {
   id: number
   name: string
   slug: string
+  permalink: string
   price: string
   regular_price: string
   sale_price: string
@@ -19,12 +20,19 @@ export interface WooProduct {
   sku: string
 }
 
+export interface ProductImage {
+  src: string
+  name?: string
+  alt?: string
+}
+
 export interface CreateProductInput {
   name: string
   regular_price: string
   stock_quantity: number
   description?: string
   sku?: string
+  images?: ProductImage[]
 }
 
 export interface WooCommerceClient {

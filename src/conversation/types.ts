@@ -21,7 +21,7 @@ export interface StepTransition {
 }
 
 export interface BaseStep {
-  type: 'trigger' | 'choice' | 'input' | 'action' | 'terminal'
+  type: 'trigger' | 'choice' | 'input' | 'imageInput' | 'action' | 'terminal'
 }
 
 export interface TriggerStep extends BaseStep {
@@ -46,6 +46,15 @@ export interface InputStep extends BaseStep {
   nextStep: StepId
 }
 
+export interface ImageInputStep extends BaseStep {
+  type: 'imageInput'
+  messageKey: string
+  contextKey: string
+  nextStep: StepId
+  optional?: boolean
+  skipKeyword?: string
+}
+
 export interface ActionStep extends BaseStep {
   type: 'action'
   action: string
@@ -57,7 +66,7 @@ export interface TerminalStep extends BaseStep {
   messageKey?: string
 }
 
-export type Step = TriggerStep | ChoiceStep | InputStep | ActionStep | TerminalStep
+export type Step = TriggerStep | ChoiceStep | InputStep | ImageInputStep | ActionStep | TerminalStep
 
 export interface FlowDefinition {
   id: string

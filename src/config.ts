@@ -25,7 +25,8 @@ const configSchema = z.object({
     storeUrl: z.string({ required_error: 'WOOCOMMERCE_STORE_URL is required' }).min(1, 'WOOCOMMERCE_STORE_URL cannot be empty'),
     consumerKey: z.string({ required_error: 'WOOCOMMERCE_CONSUMER_KEY is required' }).min(1, 'WOOCOMMERCE_CONSUMER_KEY cannot be empty'),
     consumerSecret: z.string({ required_error: 'WOOCOMMERCE_CONSUMER_SECRET is required' }).min(1, 'WOOCOMMERCE_CONSUMER_SECRET cannot be empty')
-  })
+  }),
+  shopUrl: z.string().optional()
 })
 
 export type Config = z.infer<typeof configSchema>
@@ -39,7 +40,8 @@ function fieldToEnvVar(field: string): string {
     'greenApi.token': 'GREEN_API_TOKEN',
     'wooCommerce.storeUrl': 'WOOCOMMERCE_STORE_URL',
     'wooCommerce.consumerKey': 'WOOCOMMERCE_CONSUMER_KEY',
-    'wooCommerce.consumerSecret': 'WOOCOMMERCE_CONSUMER_SECRET'
+    'wooCommerce.consumerSecret': 'WOOCOMMERCE_CONSUMER_SECRET',
+    'shopUrl': 'SHOP_URL'
   }
   return mapping[field] || field.toUpperCase()
 }
@@ -60,7 +62,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       storeUrl: env.WOOCOMMERCE_STORE_URL,
       consumerKey: env.WOOCOMMERCE_CONSUMER_KEY,
       consumerSecret: env.WOOCOMMERCE_CONSUMER_SECRET
-    }
+    },
+    shopUrl: env.SHOP_URL
   })
 
   if (!result.success) {

@@ -35,14 +35,14 @@ export function createValidWebhookPayload(text: string) {
   }
 }
 
-export function createImageWebhookPayload() {
+export function createImageWebhookPayload(url = 'https://example.com/image.jpg', mimeType = 'image/jpeg') {
   return {
     typeWebhook: 'incomingMessageReceived',
     instanceData: { idInstance: 123, wid: '123456789@c.us' },
     senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
     messageData: {
       typeMessage: 'imageMessage',
-      fileMessageData: { downloadUrl: 'https://example.com/image.jpg' }
+      fileMessageData: { downloadUrl: url, mimeType }
     },
     idMessage: 'ABC123'
   }

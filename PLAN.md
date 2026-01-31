@@ -52,6 +52,16 @@ A working production-ready app that:
 ### Pending
 - [ ] Investigate better validation approach for product fields (consider Zod schemas, reusable validators, better error messages)
 
+### Completed (Step 2 - Product Image Support)
+- [x] Add support for image messages from Green API (imageMessage with fileMessageData.downloadUrl)
+- [x] Add ImageInputStep type for waiting for image uploads
+- [x] Add awaiting_product_image step in flow definition (after product fields, before product creation)
+- [x] Update flow controller to handle imageInput step type
+- [x] Support skip keyword to continue without image
+- [x] Support stop keyword to cancel during image input
+- [x] Update WooCommerce client to include images when creating product
+- [x] Add user-friendly messages for image input flow
+
 ### Completed (Step 2 - WooCommerce Product Creation)
 - [x] Implement actual addProduct action (WooCommerce API call to create product)
 - [x] Add createProduct method to WooCommerceClient interface and implementation

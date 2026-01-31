@@ -41,6 +41,7 @@ export type WooCommerceErrorCode =
   | 'not_found'
   | 'duplicate_sku'
   | 'invalid_data'
+  | 'image_upload_error'
   | 'server_error'
   | 'unknown'
 

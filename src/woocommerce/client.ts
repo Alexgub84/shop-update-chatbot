@@ -34,6 +34,9 @@ export function createWooCommerceClient(
       if (parsed.code === 'product_invalid_sku' || parsed.message?.includes('SKU')) {
         return 'duplicate_sku'
       }
+      if (parsed.code === 'woocommerce_product_image_upload_error') {
+        return 'image_upload_error'
+      }
       if (parsed.code === 'rest_invalid_param' || parsed.code === 'woocommerce_rest_invalid_product') {
         return 'invalid_data'
       }
@@ -154,7 +157,7 @@ export function createWooCommerceClient(
   async function createProduct(input: CreateProductInput): Promise<WooProduct> {
     const url = `${config.storeUrl}/wp-json/wc/v3/products`
 
-    const body = {
+    const body: Record<string, unknown> = {
       name: input.name,
       type: 'simple',
       regular_price: input.regular_price,
@@ -164,7 +167,11 @@ export function createWooCommerceClient(
       sku: input.sku
     }
 
-    log.info({ event: 'woocommerce_create_product_start', name: input.name, sku: input.sku })
+    if (input.images && input.images.length > 0) {
+      body.images = input.images
+    }
+
+    log.info({ event: 'woocommerce_create_product_start', name: input.name, sku: input.sku, hasImages: !!input.images?.length })
 
     let response: Response
     try {

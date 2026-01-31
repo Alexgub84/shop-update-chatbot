@@ -172,7 +172,7 @@ describe('E2E: Webhook Flow', () => {
       expect(response.statusCode).toBe(200)
       const body = response.json()
       expect(body.handled).toBe(false)
-      expect(body.action).toBe('ignored_unsupported')
+      expect(body.action).toBe('flow_processed')
     })
   })
 

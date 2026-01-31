@@ -2,7 +2,7 @@ import { WebhookError } from '../errors.js'
 import { createNoopLogger, type Logger } from '../logger.js'
 import type { GreenApiSender } from '../greenapi/sender.js'
 import type { FlowController } from '../conversation/flow-controller.js'
-import { incomingMessageSchema, extractMessageContent, type IncomingMessage } from './types.js'
+import { incomingMessageSchema, extractMessageContent, type IncomingMessage, type ExtractedMessage } from './types.js'
 
 export interface WebhookHandlerDeps {
   flowController: FlowController
@@ -32,7 +32,7 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
   async function handle(body: unknown): Promise<WebhookHandlerResult> {
     const payload = parsePayload(body)
 
-    const messageContent = extractMessageContent(payload)
+    const extractedMessage = extractMessageContent(payload)
 
     logger.info({
       event: 'webhook_received',
@@ -40,7 +40,8 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
       messageId: payload.idMessage,
       typeWebhook: payload.typeWebhook,
       typeMessage: payload.messageData.typeMessage,
-      messageContent
+      extractedType: extractedMessage?.type,
+      extractedContent: extractedMessage?.type === 'image' ? '[image]' : extractedMessage?.content
     })
 
     if (payload.typeWebhook !== 'incomingMessageReceived') {
@@ -48,7 +49,7 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
       return { handled: false, action: 'ignored_webhook_type' }
     }
 
-    if (messageContent === null) {
+    if (extractedMessage === null) {
       logger.warn({
         event: 'ignored_unsupported',
         typeMessage: payload.messageData.typeMessage,
@@ -58,7 +59,7 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
     }
 
     const chatId = payload.senderData.chatId
-    const result = await flowController.process(chatId, messageContent)
+    const result = await flowController.process(chatId, extractedMessage)
 
     if (!result.handled) {
       logger.info({ event: 'flow_not_handled', chatId })

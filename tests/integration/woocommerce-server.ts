@@ -91,10 +91,12 @@ export function createMockWooCommerceServer(port = 0): MockWooCommerceServer {
       }
     }
 
+    const slug = String(body.name || 'product').toLowerCase().replace(/\s+/g, '-')
     const newProduct: WooProduct = {
       id: nextProductId++,
       name: String(body.name || 'Product'),
-      slug: String(body.name || 'product').toLowerCase().replace(/\s+/g, '-'),
+      slug,
+      permalink: `http://localhost:${actualPort}/product/${slug}/`,
       price: String(body.regular_price || ''),
       regular_price: String(body.regular_price || ''),
       sale_price: '',
@@ -145,6 +147,7 @@ export function createSampleProduct(overrides: Partial<WooProduct> = {}): WooPro
     id: 1,
     name: 'Sample Product',
     slug: 'sample-product',
+    permalink: 'https://test-store.com/product/sample-product/',
     price: '19.99',
     regular_price: '24.99',
     sale_price: '19.99',

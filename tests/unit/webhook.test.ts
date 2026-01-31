@@ -47,7 +47,7 @@ describe('WebhookHandler', () => {
 
         expect(mockFlowController.process).toHaveBeenCalledWith(
           '987654321@c.us',
-          'test-shop'
+          { type: 'text', content: 'test-shop' }
         )
       })
 
@@ -128,10 +128,43 @@ describe('WebhookHandler', () => {
       })
     })
 
-    describe('unsupported message types', () => {
-      it('should ignore image messages and not call flow', async () => {
+    describe('image message handling', () => {
+      it('should process image messages and pass to flow controller', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'Image received!' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
         const handler = createHandler()
         const payload = createImageWebhookPayload()
+
+        const result = await handler.handle(payload)
+
+        expect(result.handled).toBe(true)
+        expect(result.action).toBe('flow_processed')
+        expect(mockFlowController.process).toHaveBeenCalledWith(
+          '987654321@c.us',
+          {
+            type: 'image',
+            content: 'https://example.com/image.jpg',
+            mimeType: 'image/jpeg'
+          }
+        )
+        expect(mockSender.sendMessage).toHaveBeenCalledWith(
+          '987654321@c.us',
+          'Image received!'
+        )
+      })
+    })
+
+    describe('unsupported message types', () => {
+      it('should ignore unknown message types and not call flow', async () => {
+        const handler = createHandler()
+        const payload = {
+          typeWebhook: 'incomingMessageReceived',
+          instanceData: { idInstance: 123, wid: '123456789@c.us' },
+          senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
+          messageData: { typeMessage: 'audioMessage' },
+          idMessage: 'ABC123'
+        }
 
         const result = await handler.handle(payload)
 
@@ -143,14 +176,20 @@ describe('WebhookHandler', () => {
 
       it('should log warning for unsupported message types', async () => {
         const handler = createHandler()
-        const payload = createImageWebhookPayload()
+        const payload = {
+          typeWebhook: 'incomingMessageReceived',
+          instanceData: { idInstance: 123, wid: '123456789@c.us' },
+          senderData: { chatId: '987654321@c.us', sender: '987654321@c.us' },
+          messageData: { typeMessage: 'audioMessage' },
+          idMessage: 'ABC123'
+        }
 
         await handler.handle(payload)
 
         expect(mockLogger.warn).toHaveBeenCalledWith(
           expect.objectContaining({
             event: 'ignored_unsupported',
-            typeMessage: 'imageMessage'
+            typeMessage: 'audioMessage'
           })
         )
       })
@@ -169,7 +208,7 @@ describe('WebhookHandler', () => {
         expect(result.handled).toBe(true)
         expect(mockFlowController.process).toHaveBeenCalledWith(
           '987654321@c.us',
-          'list'
+          { type: 'text', content: 'list' }
         )
         expect(mockSender.sendMessage).toHaveBeenCalledWith(
           '987654321@c.us',
@@ -189,7 +228,7 @@ describe('WebhookHandler', () => {
         expect(result.handled).toBe(true)
         expect(mockFlowController.process).toHaveBeenCalledWith(
           '987654321@c.us',
-          'add'
+          { type: 'text', content: 'add' }
         )
         expect(mockSender.sendMessage).toHaveBeenCalledWith(
           '987654321@c.us',
@@ -209,7 +248,7 @@ describe('WebhookHandler', () => {
         expect(result.handled).toBe(true)
         expect(mockFlowController.process).toHaveBeenCalledWith(
           '987654321@c.us',
-          'list'
+          { type: 'text', content: 'list' }
         )
         expect(mockSender.sendMessage).toHaveBeenCalledWith(
           '987654321@c.us',
@@ -240,7 +279,7 @@ describe('WebhookHandler', () => {
         expect(result.handled).toBe(true)
         expect(mockFlowController.process).toHaveBeenCalledWith(
           '987654321@c.us',
-          'List Products'
+          { type: 'text', content: 'List Products' }
         )
       })
     })

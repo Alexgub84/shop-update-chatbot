@@ -31,7 +31,15 @@
       "type": "input",
       "messageKey": "add_product_prompt",
       "contextKey": "productInput",
-      "nextStep": "process_add_product"
+      "nextStep": "awaiting_product_image"
+    },
+    "awaiting_product_image": {
+      "type": "imageInput",
+      "messageKey": "add_product_image_prompt",
+      "contextKey": "productImage",
+      "nextStep": "process_add_product",
+      "optional": true,
+      "skipKeyword": "skip"
     },
     "process_add_product": {
       "type": "action",

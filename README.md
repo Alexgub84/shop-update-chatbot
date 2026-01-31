@@ -9,10 +9,11 @@ WhatsApp chatbot for shop inventory management via Green API and WooCommerce.
 - **Add Products** - Guided product creation with field validation
   - Required fields: Name, Price, Stock
   - Optional: Description
+  - Optional: Product image (supports phone camera photos)
   - Auto-generated SKU (UUID)
   - Input validation (price must be number, stock must be integer)
   - Memory persistence for partial inputs across messages
-  - "stop" command to cancel and return to menu
+  - "skip" to skip image, "stop" to cancel
 
 ## Setup
 
@@ -63,16 +64,26 @@ User: [Click "List Products"]
 Bot: [Product list from WooCommerce + Buttons]
 
 User: [Click "Add New Product"]
-Bot: "Please provide the product details:
+Bot: "Let's add a new product! 📦
+     
+     First, provide the product details:
      Name: Product Name
      Price: 29.99
      Stock: 10
      Description: (optional)
      
+     Then you'll be able to add a product image 📸
+     
      Send "stop" to cancel."
 
 User: "Name: Widget\nPrice: 19.99\nStock: 50"
-Bot: "Product "Widget" added successfully!"
+Bot: "Now send a product image.
+     📸 You can take a photo with your phone camera or send an existing image.
+     Send "skip" if you don't want to add an image.
+     Send "stop" to cancel."
+
+User: [Sends photo]
+Bot: "Image received! Product "Widget" added successfully!"
      [Buttons: List Products | Add New Product]
 ```
 

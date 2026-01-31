@@ -453,7 +453,8 @@ describe('WooCommerceClient', () => {
       expect(mockLogger.info).toHaveBeenCalledWith({
         event: 'woocommerce_create_product_start',
         name: 'Test Product',
-        sku: 'TEST-SKU-123'
+        sku: 'TEST-SKU-123',
+        hasImages: false
       })
       expect(mockLogger.info).toHaveBeenCalledWith({
         event: 'woocommerce_create_product_success',
@@ -714,6 +715,98 @@ describe('WooCommerceClient', () => {
 
       const calledBody = JSON.parse(mockFetch.mock.calls[0][1].body)
       expect(calledBody.description).toBe('')
+    })
+
+    it('should include images array when images are provided', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => createMockProduct({ id: 1 })
+      })
+
+      const client = createWooCommerceClient(config, mockLogger, mockFetch)
+      await client.createProduct({
+        name: 'Product with Image',
+        regular_price: '19.99',
+        stock_quantity: 5,
+        images: [
+          { src: 'https://example.com/image.jpg', name: 'product-image', alt: 'Product image' }
+        ]
+      })
+
+      const calledBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+      expect(calledBody.images).toEqual([
+        { src: 'https://example.com/image.jpg', name: 'product-image', alt: 'Product image' }
+      ])
+    })
+
+    it('should log hasImages: true when images are provided', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => createMockProduct({ id: 1, sku: 'IMG-SKU' })
+      })
+
+      const client = createWooCommerceClient(config, mockLogger, mockFetch)
+      await client.createProduct({
+        name: 'Product with Image',
+        regular_price: '19.99',
+        stock_quantity: 5,
+        sku: 'IMG-SKU',
+        images: [{ src: 'https://example.com/image.jpg' }]
+      })
+
+      expect(mockLogger.info).toHaveBeenCalledWith({
+        event: 'woocommerce_create_product_start',
+        name: 'Product with Image',
+        sku: 'IMG-SKU',
+        hasImages: true
+      })
+    })
+
+    it('should not include images array when images is empty', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => createMockProduct({ id: 1 })
+      })
+
+      const client = createWooCommerceClient(config, mockLogger, mockFetch)
+      await client.createProduct({
+        name: 'Product without Image',
+        regular_price: '19.99',
+        stock_quantity: 5,
+        images: []
+      })
+
+      const calledBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+      expect(calledBody.images).toBeUndefined()
+    })
+
+    it('should throw WooCommerceError with image_upload_error code on image upload failure', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify({
+          code: 'woocommerce_product_image_upload_error',
+          message: 'Error getting remote image https://example.com/bad-image.jpg. Error: A valid URL was not provided.',
+          data: { status: 400 }
+        })
+      })
+
+      const client = createWooCommerceClient(config, mockLogger, mockFetch)
+
+      try {
+        await client.createProduct({
+          name: 'Product with Bad Image',
+          regular_price: '19.99',
+          stock_quantity: 5,
+          images: [{ src: 'https://example.com/bad-image.jpg' }]
+        })
+        expect.fail('Should have thrown')
+      } catch (err) {
+        expect(err).toBeInstanceOf(WooCommerceError)
+        expect((err as WooCommerceError).errorCode).toBe('image_upload_error')
+        expect((err as WooCommerceError).statusCode).toBe(400)
+        expect((err as WooCommerceError).message).toContain('Error getting remote image')
+      }
     })
   })
 })

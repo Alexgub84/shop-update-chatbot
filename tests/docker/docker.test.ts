@@ -408,7 +408,7 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
     logStep(TEST_NAME, 'Verified product input prompt was sent')
   }, 10000)
 
-  it('Step 3: Send valid product details - receives confirmation with SKU', async () => {
+  it('Step 3: Send valid product details - receives image prompt', async () => {
     logStep(TEST_NAME, 'Sending valid product details')
     
     const productInput = 'Name: Test Docker Product\nPrice: 49.99\nStock: 25\nDescription: A product added via Docker test'
@@ -427,12 +427,27 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
 
     await new Promise(resolve => setTimeout(resolve, 500))
 
-    const logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    let logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
     
     expect(logs).toContain('input_received')
     expect(logs).toContain('product_data_updated')
+    expect(logs).toContain('send one product image')
+    logStep(TEST_NAME, 'Verified product data stored and image prompt sent')
+
+    logStep(TEST_NAME, 'Skipping image step')
+    const skipResponse = await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('skip', CHAT_ID))
+    })
+    expect(skipResponse.status).toBe(200)
+    
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    expect(logs).toContain('image_input_skipped')
     expect(logs).toContain('add_product_processing')
-    logStep(TEST_NAME, 'Verified product data was processed')
+    logStep(TEST_NAME, 'Verified product was processed after skipping image')
 
     expect(logs).toContain('Test Docker Product')
     expect(logs).toContain('49.99')
@@ -447,7 +462,7 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
     logStep(TEST_NAME, 'Verified buttons were sent again after product added')
     
     logStep(TEST_NAME, 'Add Product flow test completed successfully!')
-  }, 10000)
+  }, 15000)
 
   it('Step 4: Test partial input then complete - remembers values', async () => {
     const PARTIAL_CHAT_ID = 'partial-input-test@c.us'
@@ -482,10 +497,22 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
     logStep(TEST_NAME, 'Verified partial input stored and missing fields requested')
 
     logStep(TEST_NAME, 'Sending remaining fields (Price and Stock)')
-    const response = await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+    await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(createWebhookPayload('Price: 99.99\nStock: 50', PARTIAL_CHAT_ID))
+    })
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    logs = exec(`docker logs ${ADD_PRODUCT_CONTAINER}`)
+    expect(logs).toContain('send one product image')
+    logStep(TEST_NAME, 'Verified image prompt sent after completing fields')
+
+    logStep(TEST_NAME, 'Skipping image step')
+    const response = await fetch(`http://localhost:${ADD_PRODUCT_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload('skip', PARTIAL_CHAT_ID))
     })
     const body = await response.json()
 

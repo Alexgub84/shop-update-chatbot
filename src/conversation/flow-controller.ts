@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { WooCommerceError, type WooCommerceErrorCode } from '../errors.js'
 import { createNoopLogger, type Logger } from '../logger.js'
 import type { WooCommerceClient } from '../woocommerce/types.js'
+import type { ExtractedMessage } from '../webhook/types.js'
 import type {
   FlowDefinition,
   FlowResult,
@@ -12,6 +13,7 @@ import type {
   TriggerStep,
   ActionStep,
   InputStep,
+  ImageInputStep,
   Step
 } from './types.js'
 
@@ -24,19 +26,28 @@ export interface FlowControllerDeps {
   wooCommerce?: WooCommerceClient
 }
 
+export interface MessageInput {
+  type: 'text' | 'image'
+  content: string
+  mimeType?: string
+}
+
 export interface FlowController {
-  process(chatId: string, messageText: string): Promise<FlowResult>
+  process(chatId: string, message: MessageInput): Promise<FlowResult>
 }
 
 export function createFlowController(dependencies: FlowControllerDeps): FlowController {
   const { memory, flow, messages, triggerCode, wooCommerce } = dependencies
   const logger = dependencies.logger ?? createNoopLogger()
 
-  function isTriggerMatch(text: string): boolean {
+  function isTriggerMatch(message: MessageInput): boolean {
+    if (message.type !== 'text') {
+      return false
+    }
     if (!triggerCode) {
       return true
     }
-    return text.trim().toLowerCase() === triggerCode.toLowerCase()
+    return message.content.trim().toLowerCase() === triggerCode.toLowerCase()
   }
 
   function getMessage(key: string): string {
@@ -50,6 +61,7 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     not_found: 'error_not_found',
     duplicate_sku: 'error_duplicate_sku',
     invalid_data: 'error_invalid_data',
+    image_upload_error: 'error_image_upload',
     server_error: 'error_server',
     unknown: 'error_unknown'
   }
@@ -93,10 +105,10 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
 
   function processTriggerStep(
     chatId: string,
-    messageText: string,
+    message: MessageInput,
     step: TriggerStep
   ): FlowResult {
-    if (!isTriggerMatch(messageText)) {
+    if (!isTriggerMatch(message)) {
       logger.info({ event: 'trigger_no_match', chatId })
       return { handled: step.onNoMatch.handled }
     }
@@ -136,14 +148,25 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
 
   async function processChoiceStep(
     chatId: string,
-    messageText: string,
+    message: MessageInput,
     session: Session,
     step: ChoiceStep
   ): Promise<FlowResult> {
-    const matchedOption = matchChoiceOption(step, messageText)
+    if (message.type !== 'text') {
+      logger.info({ event: 'choice_invalid_type', chatId, type: message.type })
+      const invalidStep = flow.steps[step.onInvalid.nextStep]
+      if (isChoiceStep(invalidStep)) {
+        const buttons = buildButtonsFromChoice(invalidStep)
+        buttons.header = getMessage(step.onInvalid.messageKey)
+        return { handled: true, buttons }
+      }
+      return { handled: true, response: getMessage(step.onInvalid.messageKey) }
+    }
+
+    const matchedOption = matchChoiceOption(step, message.content)
 
     if (!matchedOption) {
-      logger.info({ event: 'choice_invalid', chatId, input: messageText })
+      logger.info({ event: 'choice_invalid', chatId, input: message.content })
       session.currentStep = step.onInvalid.nextStep
       memory.set(chatId, session)
 
@@ -224,17 +247,32 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     return step?.type === 'input'
   }
 
+  function isImageInputStep(step: Step | undefined): step is ImageInputStep {
+    return step?.type === 'imageInput'
+  }
+
   async function processInputStep(
     chatId: string,
-    messageText: string,
+    message: MessageInput,
     session: Session,
     step: InputStep
   ): Promise<FlowResult> {
-    logger.info({ event: 'input_received', chatId, contextKey: step.contextKey })
+    logger.info({ event: 'input_received', chatId, contextKey: step.contextKey, type: message.type })
+
+    if (message.type !== 'text') {
+      logger.info({ event: 'input_invalid_type', chatId, type: message.type })
+      return {
+        handled: true,
+        response: getMessage(step.messageKey)
+      }
+    }
+
+    const messageText = message.content
 
     if (messageText.trim().toLowerCase() === 'stop') {
       logger.info({ event: 'input_cancelled', chatId, contextKey: step.contextKey })
       delete session.context.productData
+      delete session.context.productImage
       delete session.context[step.contextKey]
       session.currentStep = 'awaiting_intent'
       memory.set(chatId, session)
@@ -279,6 +317,13 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
       if (nextStep && nextStep.type === 'action') {
         return await processActionStep(chatId, session, nextStep as ActionStep)
       }
+
+      if (isImageInputStep(nextStep)) {
+        return {
+          handled: true,
+          response: getMessage(nextStep.messageKey)
+        }
+      }
     }
 
     session.context[step.contextKey] = messageText
@@ -305,7 +350,90 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
       }
     }
 
+    if (isImageInputStep(nextStep)) {
+      return {
+        handled: true,
+        response: getMessage(nextStep.messageKey)
+      }
+    }
+
     return { handled: true }
+  }
+
+  async function processImageInputStep(
+    chatId: string,
+    message: MessageInput,
+    session: Session,
+    step: ImageInputStep
+  ): Promise<FlowResult> {
+    logger.info({ event: 'image_input_received', chatId, contextKey: step.contextKey, type: message.type })
+
+    if (message.type === 'text') {
+      const text = message.content.trim().toLowerCase()
+
+      if (text === 'stop') {
+        logger.info({ event: 'image_input_cancelled', chatId })
+        delete session.context.productData
+        delete session.context.productImage
+        session.currentStep = 'awaiting_intent'
+        memory.set(chatId, session)
+
+        const intentStep = flow.steps['awaiting_intent']
+        if (isChoiceStep(intentStep)) {
+          const buttons = buildButtonsFromChoice(intentStep)
+          buttons.header = getMessage('add_product_cancelled')
+          return { handled: true, buttons }
+        }
+        return { handled: true, response: getMessage('add_product_cancelled') }
+      }
+
+      if (step.optional && step.skipKeyword && text === step.skipKeyword.toLowerCase()) {
+        logger.info({ event: 'image_input_skipped', chatId })
+        session.currentStep = step.nextStep
+        memory.set(chatId, session)
+
+        const nextStep = flow.steps[step.nextStep]
+        if (nextStep && nextStep.type === 'action') {
+          return await processActionStep(chatId, session, nextStep as ActionStep)
+        }
+
+        return { handled: true, response: getMessage('add_product_image_skipped') }
+      }
+
+      logger.info({ event: 'image_input_invalid_text', chatId, text })
+      return {
+        handled: true,
+        response: getMessage('add_product_image_invalid')
+      }
+    }
+
+    if (message.type === 'image') {
+      logger.info({ event: 'image_input_received_image', chatId, mimeType: message.mimeType })
+      session.context[step.contextKey] = {
+        url: message.content,
+        mimeType: message.mimeType
+      }
+      session.currentStep = step.nextStep
+      memory.set(chatId, session)
+
+      const nextStep = flow.steps[step.nextStep]
+      if (nextStep && nextStep.type === 'action') {
+        const imageReceivedMsg = getMessage('add_product_image_received')
+        const actionResult = await processActionStep(chatId, session, nextStep as ActionStep)
+        if (actionResult.preMessage) {
+          actionResult.preMessage = `${imageReceivedMsg}\n\n${actionResult.preMessage}`
+        } else if (actionResult.response) {
+          actionResult.response = `${imageReceivedMsg}\n\n${actionResult.response}`
+        } else {
+          actionResult.response = imageReceivedMsg
+        }
+        return actionResult
+      }
+
+      return { handled: true, response: getMessage('add_product_image_received') }
+    }
+
+    return { handled: true, response: getMessage('add_product_image_invalid') }
   }
 
   async function executeListProducts(): Promise<string> {
@@ -433,8 +561,14 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     return parts.join('\n\n')
   }
 
+  interface ProductImageData {
+    url: string
+    mimeType?: string
+  }
+
   async function executeAddProduct(session: Session): Promise<string> {
     const productData = session.context.productData as ProductData | undefined
+    const productImage = session.context.productImage as ProductImageData | undefined
 
     if (!productData || !isProductComplete(productData)) {
       logger.warn({ event: 'add_product_incomplete', productData })
@@ -449,23 +583,31 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     productData.sku = randomUUID()
     session.context.productData = productData
 
-    logger.info({ event: 'add_product_processing', productData })
+    logger.info({ event: 'add_product_processing', productData, hasImage: !!productImage })
 
     try {
-      const createdProduct = await wooCommerce.createProduct({
+      const createInput: Parameters<typeof wooCommerce.createProduct>[0] = {
         name: productData.name!,
         regular_price: productData.price!.toString(),
         stock_quantity: productData.stock!,
         description: productData.description,
         sku: productData.sku
-      })
+      }
 
-      logger.info({ event: 'add_product_success', productId: createdProduct.id, sku: createdProduct.sku })
+      if (productImage?.url) {
+        createInput.images = [{ src: productImage.url, name: productData.name }]
+        logger.info({ event: 'add_product_with_image', imageUrl: productImage.url })
+      }
+
+      const createdProduct = await wooCommerce.createProduct(createInput)
+
+      logger.info({ event: 'add_product_success', productId: createdProduct.id, sku: createdProduct.sku, permalink: createdProduct.permalink })
 
       delete session.context.productData
+      delete session.context.productImage
 
       const template = getMessage('add_product_received')
-      return template.replace('{name}', createdProduct.name)
+      return template.replace('{name}', createdProduct.name).replace('{permalink}', createdProduct.permalink)
     } catch (err) {
       logger.error({ event: 'add_product_error', error: err, productData })
       return `${getMessage('add_product_error')}\n\n${getErrorMessage(err)}`
@@ -515,7 +657,7 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
     }
   }
 
-  async function process(chatId: string, messageText: string): Promise<FlowResult> {
+  async function process(chatId: string, message: MessageInput): Promise<FlowResult> {
     let session = memory.get(chatId)
 
     if (!session) {
@@ -524,7 +666,7 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
         logger.error({ event: 'invalid_initial_step', chatId })
         return { handled: false }
       }
-      return processTriggerStep(chatId, messageText, triggerStep as TriggerStep)
+      return processTriggerStep(chatId, message, triggerStep as TriggerStep)
     }
 
     const currentStep = flow.steps[session.currentStep]
@@ -536,13 +678,16 @@ export function createFlowController(dependencies: FlowControllerDeps): FlowCont
 
     switch (currentStep.type) {
       case 'trigger':
-        return processTriggerStep(chatId, messageText, currentStep as TriggerStep)
+        return processTriggerStep(chatId, message, currentStep as TriggerStep)
 
       case 'choice':
-        return await processChoiceStep(chatId, messageText, session, currentStep as ChoiceStep)
+        return await processChoiceStep(chatId, message, session, currentStep as ChoiceStep)
 
       case 'input':
-        return await processInputStep(chatId, messageText, session, currentStep as InputStep)
+        return await processInputStep(chatId, message, session, currentStep as InputStep)
+
+      case 'imageInput':
+        return await processImageInputStep(chatId, message, session, currentStep as ImageInputStep)
 
       case 'action':
         return await processActionStep(chatId, session, currentStep as ActionStep)
