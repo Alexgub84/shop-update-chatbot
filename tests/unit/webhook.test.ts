@@ -364,8 +364,8 @@ describe('WebhookHandler', () => {
 
         expect(mockLogger.info).toHaveBeenCalledWith(
           expect.objectContaining({
-            event: 'webhook_received',
-            chatId: '987654321@c.us',
+            event: '>>> FIRST MSG RECEIVED <<<',
+            phone: '987654321@c.us',
             messageId: 'ABC123'
           })
         )

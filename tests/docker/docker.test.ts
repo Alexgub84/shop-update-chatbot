@@ -709,6 +709,165 @@ describe('Docker: WooCommerce Integration - List Products (docker-test:woocommer
   }, 15000)
 })
 
+describe('Docker: Multi-User Concurrent Flow (docker-test:multi-user-flow)', () => {
+  const TEST_NAME = 'MULTI-USER-FLOW'
+  const MULTI_USER_CONTAINER = 'shop-update-chatbot-multi-user-test'
+  const MULTI_USER_PORT = 3092
+  const MULTI_USER_MOCK_PORT = 3093
+  const TRIGGER_MESSAGE = 'test-shop'
+
+  const USER_A_CHAT_ID = '1234567890@c.us'
+  const USER_B_CHAT_ID = '9876543210@c.us'
+
+  let mockWooServer: MockWooCommerceServer
+
+  async function sendWebhook(text: string, chatId: string) {
+    const response = await fetch(`http://localhost:${MULTI_USER_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload(text, chatId))
+    })
+    return { status: response.status, body: await response.json() }
+  }
+
+  beforeAll(async () => {
+    logStep(TEST_NAME, 'Cleanup: Removing any existing test container')
+    execSilent(`docker rm -f ${MULTI_USER_CONTAINER}`)
+    
+    logStep(TEST_NAME, 'Starting mock WooCommerce server on host')
+    mockWooServer = createMockWooCommerceServer(MULTI_USER_MOCK_PORT)
+    mockWooServer.setAuthCredentials('ck_multi_user_test', 'cs_multi_user_test')
+    await mockWooServer.start()
+    logStep(TEST_NAME, `Mock WooCommerce server running on port ${MULTI_USER_MOCK_PORT}`)
+  }, 10000)
+
+  afterAll(async () => {
+    logStep(TEST_NAME, 'Cleanup: Removing test container')
+    execSilent(`docker rm -f ${MULTI_USER_CONTAINER}`)
+    logStep(TEST_NAME, 'Cleanup: Stopping mock WooCommerce server')
+    await mockWooServer.stop()
+  }, 10000)
+
+  it('builds image for Multi-User test', () => {
+    logStep(TEST_NAME, 'Building Docker image')
+    expect(() => {
+      execSync(`docker build -t ${IMAGE_NAME} .`, { stdio: 'inherit' })
+    }).not.toThrow()
+    logStep(TEST_NAME, 'Docker image built successfully')
+  }, 120000)
+
+  it('starts container with FAKE_GREENAPI_MODE enabled', async () => {
+    logStep(TEST_NAME, 'Starting container with FAKE_GREENAPI_MODE=true')
+    exec(`docker run -d \
+      --name ${MULTI_USER_CONTAINER} \
+      -p ${MULTI_USER_PORT}:${MULTI_USER_PORT} \
+      -e PORT=${MULTI_USER_PORT} \
+      -e FAKE_GREENAPI_MODE=true \
+      -e "TRIGGER_CODE=${TRIGGER_MESSAGE}" \
+      -e GREEN_API_INSTANCE_ID=multi-user-instance \
+      -e GREEN_API_TOKEN=multi-user-token \
+      -e WOOCOMMERCE_STORE_URL=http://host.docker.internal:${MULTI_USER_MOCK_PORT} \
+      -e WOOCOMMERCE_CONSUMER_KEY=ck_multi_user_test \
+      -e WOOCOMMERCE_CONSUMER_SECRET=cs_multi_user_test \
+      -e LOG_LEVEL=info \
+      ${IMAGE_NAME}`)
+
+    logStep(TEST_NAME, 'Waiting for container to become healthy')
+    const healthy = await waitForHealthy(`http://localhost:${MULTI_USER_PORT}/health`, 15000)
+    
+    if (!healthy) {
+      const logs = exec(`docker logs ${MULTI_USER_CONTAINER}`)
+      console.error('Container logs:', logs)
+    }
+    
+    logStep(TEST_NAME, healthy ? 'Container is healthy' : 'Container health check FAILED')
+    expect(healthy).toBe(true)
+  }, 30000)
+
+  it('Two users complete full add-product flows simultaneously with interleaved messages', async () => {
+    logStep(TEST_NAME, '=== SIMULATING TWO CONCURRENT USERS ===')
+    logStep(TEST_NAME, `User A: ${USER_A_CHAT_ID}`)
+    logStep(TEST_NAME, `User B: ${USER_B_CHAT_ID}`)
+
+    logStep(TEST_NAME, '[1] User A sends trigger "test-shop"')
+    let result = await sendWebhook(TRIGGER_MESSAGE, USER_A_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    logStep(TEST_NAME, '[2] User B sends trigger "test-shop"')
+    result = await sendWebhook(TRIGGER_MESSAGE, USER_B_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    logStep(TEST_NAME, '[3] User A clicks "add" button')
+    result = await sendWebhook('add', USER_A_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    logStep(TEST_NAME, '[4] User B clicks "add" button')
+    result = await sendWebhook('add', USER_B_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    logStep(TEST_NAME, '[5] User A sends product name only (partial)')
+    result = await sendWebhook('Name: User A Special Product', USER_A_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    logStep(TEST_NAME, '[6] User B sends complete product data')
+    result = await sendWebhook('Name: User B Premium Product\nPrice: 75.50\nStock: 20', USER_B_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    logStep(TEST_NAME, '[7] User A sends remaining fields (price + stock)')
+    result = await sendWebhook('Price: 125.00\nStock: 8', USER_A_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    logStep(TEST_NAME, '[8] User B skips image')
+    result = await sendWebhook('skip', USER_B_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    logStep(TEST_NAME, '[9] User A skips image')
+    result = await sendWebhook('skip', USER_A_CHAT_ID)
+    expect(result.status).toBe(200)
+    expect(result.body.handled).toBe(true)
+
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    logStep(TEST_NAME, '=== VERIFYING RESULTS ===')
+    const logs = exec(`docker logs ${MULTI_USER_CONTAINER}`)
+
+    const triggerMatches = logs.match(/trigger_matched/g)
+    expect(triggerMatches).not.toBeNull()
+    expect(triggerMatches!.length).toBe(2)
+    logStep(TEST_NAME, '✓ Both users triggered successfully (2 trigger_matched events)')
+
+    const addProductSuccessMatches = logs.match(/add_product_success/g)
+    expect(addProductSuccessMatches).not.toBeNull()
+    expect(addProductSuccessMatches!.length).toBe(2)
+    logStep(TEST_NAME, '✓ Both products created successfully (2 add_product_success events)')
+
+    expect(logs).toContain('User A Special Product')
+    expect(logs).toContain('125')
+    logStep(TEST_NAME, '✓ User A product data correct: "User A Special Product" @ 125.00')
+
+    expect(logs).toContain('User B Premium Product')
+    expect(logs).toContain('75.5')
+    logStep(TEST_NAME, '✓ User B product data correct: "User B Premium Product" @ 75.50')
+
+    const userALogs = logs.split('\n').filter(line => line.includes(USER_A_CHAT_ID))
+    const userBLogs = logs.split('\n').filter(line => line.includes(USER_B_CHAT_ID))
+    expect(userALogs.length).toBeGreaterThan(0)
+    expect(userBLogs.length).toBeGreaterThan(0)
+    logStep(TEST_NAME, `✓ User A had ${userALogs.length} log entries`)
+    logStep(TEST_NAME, `✓ User B had ${userBLogs.length} log entries`)
+
+    logStep(TEST_NAME, '=== MULTI-USER CONCURRENT FLOW TEST PASSED ===')
+  }, 30000)
+})
+
 describe('Docker: Production Env Health (docker-test:prod-env-health)', () => {
   const TEST_NAME = 'PROD-ENV-HEALTH'
   const ENV_FILE_PATH = '.env'

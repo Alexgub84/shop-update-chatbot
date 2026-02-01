@@ -35,8 +35,8 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
     const extractedMessage = extractMessageContent(payload)
 
     logger.info({
-      event: 'webhook_received',
-      chatId: payload.senderData.chatId,
+      event: '>>> FIRST MSG RECEIVED <<<',
+      phone: payload.senderData.chatId,
       messageId: payload.idMessage,
       typeWebhook: payload.typeWebhook,
       typeMessage: payload.messageData.typeMessage,
