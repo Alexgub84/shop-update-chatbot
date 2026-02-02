@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createMockWooCommerceServer, createSampleProduct, type MockWooCommerceServer } from '../integration/woocommerce-server.js'
+import { createMockForwardWebhookServer, type MockForwardWebhookServer } from '../integration/forward-webhook-server.js'
 
 const IMAGE_NAME = 'shop-update-chatbot-test'
 const PROD_ENV_CONTAINER = 'shop-update-chatbot-prod-env-test'
@@ -74,7 +75,7 @@ function createButtonResponsePayload(buttonId: string, chatId: string) {
   }
 }
 
-describe('Docker: Production Health (docker-test:production-health)', () => {
+describe('Docker [ALL MOCKED]: Health Check - Container starts and /health responds', () => {
   const TEST_NAME = 'PRODUCTION-HEALTH'
 
   beforeAll(() => {
@@ -149,7 +150,7 @@ describe('Docker: Production Health (docker-test:production-health)', () => {
   }, 5000)
 })
 
-describe('Docker: FAKE GreenAPI WhatsApp Flow - List Click (docker-test:fake-greenapi-whatsapp-flow-list-click)', () => {
+describe('Docker [FAKE GreenAPI, FAKE WooCommerce]: WhatsApp Flow - Trigger shows menu, List button works', () => {
   const TEST_NAME = 'FAKE-GREENAPI-FLOW'
   const CHAT_ID = 'fake-greenapi-test-user@c.us'
   const TRIGGER_MESSAGE = 'test-shop'
@@ -294,7 +295,7 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - List Click (docker-test:fake-gre
   }, 15000)
 })
 
-describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-greenapi-add-product)', () => {
+describe('Docker [FAKE GreenAPI, MOCK WooCommerce]: WhatsApp Flow - Add Product with image', () => {
   const TEST_NAME = 'FAKE-GREENAPI-ADD-PRODUCT'
   const CHAT_ID = 'add-product-test-user@c.us'
   const TRIGGER_MESSAGE = 'test-shop'
@@ -575,7 +576,7 @@ describe('Docker: FAKE GreenAPI WhatsApp Flow - Add Product (docker-test:fake-gr
   }, 15000)
 })
 
-describe('Docker: WooCommerce Integration - List Products (docker-test:woocommerce-integration)', () => {
+describe('Docker [FAKE GreenAPI, MOCK WooCommerce]: WooCommerce API - List Products', () => {
   const TEST_NAME = 'WOOCOMMERCE-INTEGRATION'
   const CHAT_ID = 'woocommerce-test-user@c.us'
   const TRIGGER_MESSAGE = 'test-shop'
@@ -709,7 +710,7 @@ describe('Docker: WooCommerce Integration - List Products (docker-test:woocommer
   }, 15000)
 })
 
-describe('Docker: Multi-User Concurrent Flow (docker-test:multi-user-flow)', () => {
+describe('Docker [FAKE GreenAPI, MOCK WooCommerce]: Multi-User - Concurrent sessions isolated', () => {
   const TEST_NAME = 'MULTI-USER-FLOW'
   const MULTI_USER_CONTAINER = 'shop-update-chatbot-multi-user-test'
   const MULTI_USER_PORT = 3092
@@ -868,7 +869,7 @@ describe('Docker: Multi-User Concurrent Flow (docker-test:multi-user-flow)', () 
   }, 30000)
 })
 
-describe('Docker: Production Env Health (docker-test:prod-env-health)', () => {
+describe('Docker [REAL .env, MOCK GreenAPI]: Production Env - Real config loads correctly', () => {
   const TEST_NAME = 'PROD-ENV-HEALTH'
   const ENV_FILE_PATH = '.env'
 
@@ -942,5 +943,132 @@ describe('Docker: Production Env Health (docker-test:prod-env-health)', () => {
     expect(body).toHaveProperty('handled', true)
     logStep(TEST_NAME, 'Webhook accepted trigger and responded correctly (MOCK_MODE - no actual API call)')
     logStep(TEST_NAME, 'Production env health test completed successfully!')
+  }, 5000)
+})
+
+describe('Docker [FAKE GreenAPI, FAKE Forwarder]: Forward Webhook - Unhandled messages forwarded', () => {
+  const TEST_NAME = 'FORWARD-WEBHOOK'
+  const FORWARD_CONTAINER = 'shop-update-chatbot-forward-test'
+  const FORWARD_APP_PORT = 3091
+  const FORWARD_MOCK_PORT = 3092
+  const TRIGGER_CODE = 'my-shop'
+  const CHAT_ID = 'forward-test-user@c.us'
+
+  let mockForwardServer: MockForwardWebhookServer
+
+  beforeAll(async () => {
+    logStep(TEST_NAME, 'Cleanup: Removing any existing test container')
+    execSilent(`docker rm -f ${FORWARD_CONTAINER}`)
+
+    logStep(TEST_NAME, 'Starting mock forward webhook server on host')
+    mockForwardServer = createMockForwardWebhookServer(FORWARD_MOCK_PORT)
+    await mockForwardServer.start()
+    logStep(TEST_NAME, `Mock forward webhook server running on port ${FORWARD_MOCK_PORT}`)
+  }, 10000)
+
+  afterAll(async () => {
+    logStep(TEST_NAME, 'Cleanup: Removing test container')
+    execSilent(`docker rm -f ${FORWARD_CONTAINER}`)
+    logStep(TEST_NAME, 'Cleanup: Stopping mock forward webhook server')
+    await mockForwardServer.stop()
+  }, 10000)
+
+  it('builds image for forward webhook test', () => {
+    logStep(TEST_NAME, 'Building Docker image')
+    expect(() => {
+      execSync(`docker build -t ${IMAGE_NAME} .`, { stdio: 'inherit' })
+    }).not.toThrow()
+    logStep(TEST_NAME, 'Docker image built successfully')
+  }, 120000)
+
+  it('starts container with FORWARD_WEBHOOK_URL configured', async () => {
+    logStep(TEST_NAME, 'Starting container with FORWARD_WEBHOOK_URL')
+    exec(`docker run -d \
+      --name ${FORWARD_CONTAINER} \
+      -p ${FORWARD_APP_PORT}:${FORWARD_APP_PORT} \
+      -e PORT=${FORWARD_APP_PORT} \
+      -e FAKE_GREENAPI_MODE=true \
+      -e "TRIGGER_CODE=${TRIGGER_CODE}" \
+      -e GREEN_API_INSTANCE_ID=forward-test-instance \
+      -e GREEN_API_TOKEN=forward-test-token \
+      -e WOOCOMMERCE_STORE_URL=https://test-store.com \
+      -e WOOCOMMERCE_CONSUMER_KEY=ck_test_key \
+      -e WOOCOMMERCE_CONSUMER_SECRET=cs_test_secret \
+      -e FORWARD_WEBHOOK_URL=http://host.docker.internal:${FORWARD_MOCK_PORT} \
+      -e LOG_LEVEL=info \
+      ${IMAGE_NAME}`)
+
+    logStep(TEST_NAME, 'Waiting for container to become healthy')
+    const healthy = await waitForHealthy(`http://localhost:${FORWARD_APP_PORT}/health`, 15000)
+
+    if (!healthy) {
+      const logs = exec(`docker logs ${FORWARD_CONTAINER}`)
+      console.error('Container logs:', logs)
+    }
+
+    logStep(TEST_NAME, healthy ? 'Container is healthy' : 'Container health check FAILED')
+    expect(healthy).toBe(true)
+
+    const logs = exec(`docker logs ${FORWARD_CONTAINER}`)
+    expect(logs).toContain('FAKE Forwarder')
+    logStep(TEST_NAME, 'Verified FAKE Forwarder mode is enabled in logs')
+  }, 30000)
+
+  it('should NOT forward when trigger code matches', async () => {
+    mockForwardServer.clearReceivedWebhooks()
+    logStep(TEST_NAME, `Sending trigger message "${TRIGGER_CODE}" - should NOT forward`)
+
+    const response = await fetch(`http://localhost:${FORWARD_APP_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(createWebhookPayload(TRIGGER_CODE, CHAT_ID))
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.handled).toBe(true)
+
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    const received = mockForwardServer.getReceivedWebhooks()
+    expect(received).toHaveLength(0)
+    logStep(TEST_NAME, 'Verified: Trigger message was handled, NOT forwarded')
+  }, 10000)
+
+  it('should forward when message does NOT match trigger code', async () => {
+    mockForwardServer.clearReceivedWebhooks()
+    const randomMessage = 'hello this is a random message'
+    const randomChatId = 'random-user@c.us'
+    logStep(TEST_NAME, `Sending non-trigger message "${randomMessage}" - should forward`)
+
+    const payload = createWebhookPayload(randomMessage, randomChatId)
+    const response = await fetch(`http://localhost:${FORWARD_APP_PORT}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.handled).toBe(false)
+
+    await new Promise(resolve => setTimeout(resolve, 300))
+
+    const logs = exec(`docker logs ${FORWARD_CONTAINER}`)
+    expect(logs).toContain('FAKE_FORWARD_WEBHOOK')
+    logStep(TEST_NAME, 'Verified: Non-trigger message was forwarded (FAKE_FORWARD_WEBHOOK in logs)')
+  }, 10000)
+
+  it('app continues working even without forward webhook (optional feature)', async () => {
+    logStep(TEST_NAME, 'Testing that forwarding is optional - app still works')
+
+    const response = await fetch(`http://localhost:${FORWARD_APP_PORT}/health`)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.status).toBe('ok')
+    logStep(TEST_NAME, 'Forward webhook test completed successfully!')
   }, 5000)
 })

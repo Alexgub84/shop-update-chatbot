@@ -3,6 +3,7 @@ import { createLogger, type Logger } from './logger.js'
 import { loadMessages, type Messages } from './messages.js'
 import { createGreenApiSender, createMockSender, createFakeGreenApiSender, type GreenApiSender } from './greenapi/sender.js'
 import { createWebhookHandler, type WebhookHandler } from './webhook/handler.js'
+import { createWebhookForwarder, createFakeWebhookForwarder, type WebhookForwarder } from './webhook/forwarder.js'
 import { createInMemoryManager } from './conversation/memory.js'
 import { createFlowController, type FlowController } from './conversation/flow-controller.js'
 import type { FlowDefinition, MemoryManager } from './conversation/types.js'
@@ -26,6 +27,7 @@ export interface AppDependencies {
   memory: MemoryManager
   flowController: FlowController
   webhookHandler: WebhookHandler
+  forwarder?: WebhookForwarder
 }
 
 export interface App {
@@ -69,10 +71,22 @@ export function createApp(): App {
     wooCommerce
   })
 
+  let forwarder: WebhookForwarder | undefined
+  if (config.forwardWebhookUrl) {
+    if (config.fakeGreenApiMode) {
+      forwarder = createFakeWebhookForwarder(logger)
+      logger.info({ event: 'fake_forwarder_enabled', mode: 'FAKE Forwarder' })
+    } else {
+      forwarder = createWebhookForwarder({ url: config.forwardWebhookUrl }, logger)
+      logger.info({ event: 'forwarder_enabled', url: config.forwardWebhookUrl })
+    }
+  }
+
   const webhookHandler = createWebhookHandler({
     flowController,
     sender,
-    logger
+    logger,
+    forwarder
   })
 
   logger.info({ event: 'dependencies_loaded', messageKeys: Object.keys(messages), flowId: flow.id })
@@ -81,6 +95,6 @@ export function createApp(): App {
 
   return {
     server,
-    dependencies: { config, logger, messages, sender, wooCommerce, memory, flowController, webhookHandler }
+    dependencies: { config, logger, messages, sender, wooCommerce, memory, flowController, webhookHandler, forwarder }
   }
 }

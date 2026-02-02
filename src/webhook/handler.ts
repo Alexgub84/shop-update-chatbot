@@ -2,12 +2,14 @@ import { WebhookError } from '../errors.js'
 import { createNoopLogger, type Logger } from '../logger.js'
 import type { GreenApiSender } from '../greenapi/sender.js'
 import type { FlowController } from '../conversation/flow-controller.js'
+import type { WebhookForwarder } from './forwarder.js'
 import { incomingMessageSchema, extractMessageContent, type IncomingMessage, type ExtractedMessage } from './types.js'
 
 export interface WebhookHandlerDeps {
   flowController: FlowController
   sender: GreenApiSender
   logger?: Logger
+  forwarder?: WebhookForwarder
 }
 
 export interface WebhookHandlerResult {
@@ -16,7 +18,7 @@ export interface WebhookHandlerResult {
 }
 
 export function createWebhookHandler(deps: WebhookHandlerDeps) {
-  const { flowController, sender } = deps
+  const { flowController, sender, forwarder } = deps
   const logger = deps.logger ?? createNoopLogger()
 
   function parsePayload(body: unknown): IncomingMessage {
@@ -63,6 +65,9 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
 
     if (!result.handled) {
       logger.info({ event: 'flow_not_handled', chatId })
+      if (forwarder) {
+        await forwarder.forward(body)
+      }
       return { handled: false, action: 'flow_processed' }
     }
 

@@ -17,6 +17,7 @@ const configSchema = z.object({
   fakeGreenApiMode: coerceBooleanFromEnvVar,
   triggerCode: z.string().min(1).optional(),
   sessionTimeoutMs: z.coerce.number().int().min(1000).default(300000),
+  forwardWebhookUrl: z.string().url().optional(),
   greenApi: z.object({
     instanceId: z.string({ required_error: 'GREEN_API_INSTANCE_ID is required' }).min(1, 'GREEN_API_INSTANCE_ID cannot be empty'),
     token: z.string({ required_error: 'GREEN_API_TOKEN is required' }).min(1, 'GREEN_API_TOKEN cannot be empty')
@@ -36,6 +37,7 @@ function fieldToEnvVar(field: string): string {
     'port': 'PORT',
     'logLevel': 'LOG_LEVEL',
     'mockMode': 'MOCK_MODE',
+    'forwardWebhookUrl': 'FORWARD_WEBHOOK_URL',
     'greenApi.instanceId': 'GREEN_API_INSTANCE_ID',
     'greenApi.token': 'GREEN_API_TOKEN',
     'wooCommerce.storeUrl': 'WOOCOMMERCE_STORE_URL',
@@ -54,6 +56,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     fakeGreenApiMode: env.FAKE_GREENAPI_MODE,
     triggerCode: env.TRIGGER_CODE,
     sessionTimeoutMs: env.SESSION_TIMEOUT_MS,
+    forwardWebhookUrl: env.FORWARD_WEBHOOK_URL,
     greenApi: {
       instanceId: env.GREEN_API_INSTANCE_ID,
       token: env.GREEN_API_TOKEN

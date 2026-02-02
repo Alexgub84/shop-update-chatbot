@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createWebhookHandler } from '../../src/webhook/handler.js'
+import { createMockWebhookForwarder } from '../../src/webhook/forwarder.js'
 import { WebhookError } from '../../src/errors.js'
 import type { FlowController } from '../../src/conversation/flow-controller.js'
 import type { FlowResult } from '../../src/conversation/types.js'
@@ -17,6 +18,7 @@ describe('WebhookHandler', () => {
   let mockSender: ReturnType<typeof createMockSender>
   let mockLogger: ReturnType<typeof createMockLogger>
   let mockFlowController: FlowController
+  let mockForwarder: ReturnType<typeof createMockWebhookForwarder>
 
   beforeEach(() => {
     mockSender = createMockSender()
@@ -24,13 +26,15 @@ describe('WebhookHandler', () => {
     mockFlowController = {
       process: vi.fn()
     }
+    mockForwarder = createMockWebhookForwarder()
   })
 
-  function createHandler() {
+  function createHandler(options?: { withForwarder?: boolean }) {
     return createWebhookHandler({
       flowController: mockFlowController,
       sender: mockSender,
-      logger: mockLogger
+      logger: mockLogger,
+      forwarder: options?.withForwarder ? mockForwarder : undefined
     })
   }
 
@@ -404,6 +408,74 @@ describe('WebhookHandler', () => {
             chatId: '987654321@c.us'
           })
         )
+      })
+    })
+
+    describe('forwarding', () => {
+      it('should forward payload when flow returns handled=false and forwarder is configured', async () => {
+        const flowResult: FlowResult = { handled: false }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler({ withForwarder: true })
+        const payload = createValidWebhookPayload('random message')
+
+        await handler.handle(payload)
+
+        expect(mockForwarder.getCallCount()).toBe(1)
+        const forwarded = mockForwarder.getForwardedMessages()
+        expect(forwarded).toHaveLength(1)
+        expect(forwarded[0].payload).toEqual(payload)
+      })
+
+      it('should not forward when flow returns handled=true', async () => {
+        const flowResult: FlowResult = { handled: true, response: 'OK' }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler({ withForwarder: true })
+        const payload = createValidWebhookPayload('test-shop')
+
+        await handler.handle(payload)
+
+        expect(mockForwarder.getCallCount()).toBe(0)
+      })
+
+      it('should not forward when no forwarder is configured', async () => {
+        const flowResult: FlowResult = { handled: false }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler({ withForwarder: false })
+        const payload = createValidWebhookPayload('random message')
+
+        await handler.handle(payload)
+
+        expect(mockForwarder.getCallCount()).toBe(0)
+      })
+
+      it('should still return handled=false even if forwarding succeeds', async () => {
+        const flowResult: FlowResult = { handled: false }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+
+        const handler = createHandler({ withForwarder: true })
+        const payload = createValidWebhookPayload('random message')
+
+        const result = await handler.handle(payload)
+
+        expect(result.handled).toBe(false)
+        expect(result.action).toBe('flow_processed')
+      })
+
+      it('should continue working if forwarding fails', async () => {
+        const flowResult: FlowResult = { handled: false }
+        vi.mocked(mockFlowController.process).mockReturnValue(flowResult)
+        mockForwarder.setResponse(false)
+
+        const handler = createHandler({ withForwarder: true })
+        const payload = createValidWebhookPayload('random message')
+
+        const result = await handler.handle(payload)
+
+        expect(result.handled).toBe(false)
+        expect(mockForwarder.getCallCount()).toBe(1)
       })
     })
   })
